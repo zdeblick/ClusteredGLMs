@@ -1,4 +1,4 @@
-#!/home/daniel.zdeblick/anaconda3/bin/python3
+#!/home/daniel.zdeblick/anaconda3/bin/python3 #used if this script is run by bash command
 
 array_id_str = 'SLURM_ARRAY_TASK_ID' #slurm
 #array_id_str = 'PBS_ARRAYID' #pbs/moab/torque
@@ -341,7 +341,7 @@ def main_sim():
         elif share=='all':
             l2_i=0
 
-    sim_stim, sim_spikes, true_betas, true_mus = sim_GMMGLM(K, Wstd, drange=20000, delta=delta, d=d, Wtypes=Wtypes, NpK=NpK, Kmax=5, downsample=downsample)
+    sim_stim, sim_spikes, true_betas, true_mus = sim_GMMGLM(K, Wstd, drange=20000, delta=delta, d=d, Wtypes=Wtypes, NpK=NpK, downsample=downsample)
     N = sim_spikes.shape[0]
 
     print(np.sum(sim_spikes,axis=1))

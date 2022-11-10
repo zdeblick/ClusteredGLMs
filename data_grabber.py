@@ -5,12 +5,12 @@ from allensdk.core.cell_types_cache import CellTypesCache
 
 
 def get_sweeps_with_stim(ephys_data,stim_type):
-"""
-Input: ephys_data - an object containing all data for a given neuron
-         stim_type - a string specifying which stimulus type we want to pull
-Returns: a list of dicts, each containing stimululus and spike time data for an individual trial,
-         for all trials of type stim_type contained in ephys_data
-"""
+    """
+    Input: ephys_data - an object containing all data for a given neuron
+             stim_type - a string specifying which stimulus type we want to pull
+    Returns: a list of dicts, each containing stimululus and spike time data for an individual trial,
+             for all trials of type stim_type contained in ephys_data
+    """
 
     sweeps = []
     for i in ephys_data.get_experiment_sweep_numbers():
@@ -21,13 +21,13 @@ Returns: a list of dicts, each containing stimululus and spike time data for an 
     return sweeps
 
 def bin_spikes_and_stim(sweeps,bin_len,trim_0=True):
-"""
-Inputs: sweeps - a list of dicts, each containing stimululus and spike time data for an individual trial
-        bin_len - desired length of time bin in seconds
-        trim_0 - whether to include time bins when there is no stimulus
-Returns: spikes_list - a list of np arrays, each containing the spiking response for a single trial
-         stim_list - a list of np arrays, each containing the stimulus (in pA) for a single trial
-"""
+    """
+    Inputs: sweeps - a list of dicts, each containing stimululus and spike time data for an individual trial
+            bin_len - desired length of time bin in seconds
+            trim_0 - whether to include time bins when there is no stimulus
+    Returns: spikes_list - a list of np arrays, each containing the spiking response for a single trial
+             stim_list - a list of np arrays, each containing the stimulus (in pA) for a single trial
+    """
     spikes_list = []
     stim_list = []
     for s_i, sweep in enumerate(sweeps):
@@ -91,6 +91,7 @@ all_new_cells.to_csv('n12_cells.csv')
 # binned_stim - list of lists of np arrays (neurons by trials by time bins) of binned stimulus to "Noise 1"
 # test_binned_spikes, test_binned_stim - same as above, for "Noise 2"
 # bin_len - length of time bins in seconds
+# test_spk_counts - list (neurons), the total number of spikes each neuron fires in response to all "Noise 2" trials
 np.savez('ivscc_data_n12',binned_spikes=bspks,binned_stim=bstms,
     test_binned_spikes=test_bspks,test_binned_stim=test_bstms,
     bin_len=bin_len,test_spk_counts=test_spk_counts)

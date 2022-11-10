@@ -18,15 +18,30 @@ from helpers import *
 ### Simulating
 
 
-def sim_GLM(stim, stim_filt, spk_filt, offset,noise_amp=None,noise_len=0,drop_rate = None, drop_len = None, downsample=None, smax=1,n_sims=1):
-    downsample = 1 if downsample is None else downsample
+def sim_GLM(stim, stim_filt, spk_filt, offset, downsample=1, smax=1, n_sims=1, noise_amp=None,noise_len=0,drop_rate = None, drop_len = None):
+    """
+    Simulates the response of a GLM to a stimulus
+    Inputs: 
+     - stim (ndarray): the stimulus, an MxT (stimulus dimensions x time bins) array, or a length T vector
+     - stim_filt (ndarray): stimulus filter, MxT^stim array, or a length T^stim vector
+     - spk_filt (ndarray): the self-interaction filter, a length T^self vector
+     - offset: the scalar offset for the model
+     - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
+     - smax (int): the maximum allowable number of spikes in a single time bin
+     - nsims(int): the number of simulated spike trains to produce
+
+    Outputs:
+     - spks (ndarray): the spiking response(s), an nsims x T array (resposes x time bins)
+     - rate (ndarray): the spike rate at each time bin that spks was sampled from, an nsims x T array
+    """
+
     if len(stim.shape)==1:
         stim=np.expand_dims(stim,0)
     if len(stim_filt.shape)==1:
         stim_filt=np.expand_dims(stim_filt,0)
     d = (stim_filt.shape[-1], spk_filt.size)
     T = stim.shape[1]
-    spks = np.zeros((n_sims,T)) # starts at time step d
+    spks = np.zeros((n_sims,T))
     rate = np.zeros((n_sims,T))
     stim_filt_todot = np.fliplr(stim_filt).reshape(1,-1)
     spk_filt_todot = np.fliplr(np.expand_dims(spk_filt,0)).T
@@ -63,13 +78,27 @@ def sim_GLM(stim, stim_filt, spk_filt, offset,noise_amp=None,noise_len=0,drop_ra
     return spks, rate
 
 
-def sim_GMMGLM(K, Wstd, delta = 1.0, NpK=40, d = [10,20], drange = 20000, beta_seed = None, Wtypes=True, Kmax=2, downsample=None):
+def sim_GMMGLM(K, Wstd, NpK=40, d = [10,20], drange = 20000, Wtypes=True, downsample=None, delta = 1.0):
+    """
+    Generates GLM parameters from a cluster distribution and simulates their responses to a predefined (IVSCC) stimulus
+    Inputs: 
+     - K (int): number of clusters
+     - Wstd (float): within cluster standard-deviation for parameters
+     - NpK (int): number of neurons per cluster
+     - d: a length two iterable of filter lengths : [T^stim, T^self]
+     - drange (int): how many time bins to simulate for each neuron
+     - Wtypes (bool):  True -> only self interaction filters are generated from a cluster distribution
+     					False -> all GLM parameters are generated from a cluster distribution
+     - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
+     - delta (float): scales the spacing between clusters. Fixed to 0.5 for all analyses shown in the paper
+    """
+
     N = NpK*K
     true_mus = np.zeros((K,d[1]+(d[0]+1)*(not Wtypes)))
     print(true_mus.shape)
 
     #Ws
-    param_spacing = np.arange(K)/(Kmax-1)*delta
+    param_spacing = np.arange(K)/4*delta
     t_abs = param_spacing*14+2
     t_rel = param_spacing*4+2
     a = (1-param_spacing)*0.2
@@ -95,8 +124,6 @@ def sim_GMMGLM(K, Wstd, delta = 1.0, NpK=40, d = [10,20], drange = 20000, beta_s
             #bs
             true_mus[k,-1] = -4.5-2*param_spacing[k]
 
-    if beta_seed is not None:
-        np.random.seed(beta_seed)
 
     true_betas = np.zeros((N,d[0]+d[1]+1))
     for k in range(K):
@@ -125,8 +152,19 @@ def sim_GMMGLM(K, Wstd, delta = 1.0, NpK=40, d = [10,20], drange = 20000, beta_s
 
 
 ### Fitting
-
 def construct_Xdsn(flat_stimuluses, binned_spikeses, d, downsample=None):
+	"""
+	Make a design matrix of inputs and vector of outputs used for fitting a GLM for one neuron
+	Inputs:
+	 - flat_stimuluses: list of np arrays (trials by stim dimensions by time bins) of binned stimulus
+	 - binned_spikeses: list of np arrays (trials by time bins) of spiking responses
+	 - d: a length two iterable of filter lengths : [T^stim, T^self]
+     - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
+    Outputs:
+     - X_dsn (ndarray): samples by features design matrix of inputs
+     - y (ndarray): vector of outputs for each sample
+	"""
+
     if type(flat_stimuluses) is np.ndarray:
         flat_stimuluses = (flat_stimuluses,)
         binned_spikeses = (binned_spikeses,)
@@ -164,7 +202,27 @@ def construct_Xdsn(flat_stimuluses, binned_spikeses, d, downsample=None):
 
 
 
-def fit_GLM(stim,spks,d,val_stim=None,val_spks=None,n_sims=1,sig=5,downsample=None,l2_stim=0,l2_self=0,guess=None):
+def fit_GLM(stim,spks,d,downsample=None,val_stim=None,val_spks=None,n_sims=1,sig=5,l2_stim=0,l2_self=0,guess=None):
+	"""
+	Fits a GLM to data one neuron, and provides metrics on training and (if provided) validation data
+	Inputs:
+	 - stim: list of np arrays (trials by stim dimensions by time bins) of binned stimulus used for fitting
+	 - spks: list of np arrays (trials by time bins) of spiking responses used for fitting
+	 - d: a length two iterable of filter lengths : [T^stim, T^self]
+     - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
+     - val_stim: list of np arrays (trials by stim dimensions by time bins) of binned stimulus used for validation
+	 - val_spks: list of np arrays (trials by time bins) of spiking responses used for validation
+	 - n_sims: number of spike trains simulated with fitted parameters used to calculate EV_ratio
+	 - sig: width (in time bins) of gaussian kernel used to smoothe spike trains when calculating EV_ratio
+	 - l2_stim, l2_self: L2 regularization hyperparameters for simulus and self-interaction filter coefficients
+	 - guess (ndarray): a length T^stim * M + T^self + 1 vector - initial guess for the parameters, used by optimizer
+    Outputs:
+     - stim_filt (MxT^stim array), spk_filt (length T^self vector), b (float): fitted model parameters
+     - train_nnll (float): ANLL of this neuron's response to the training stimulus
+     - train_corr (float): EV_ratio of this neuron's response to the training stimulus
+     - val_nnll, val_corr: same as above, returned only if validation data is provided
+	"""
+
     if type(stim) is np.ndarray:
         stim = (stim,)
         spks = (spks,)
@@ -185,18 +243,13 @@ def fit_GLM(stim,spks,d,val_stim=None,val_spks=None,n_sims=1,sig=5,downsample=No
     res = minimize(fun,guess,jac=jac,hess=hess,method='trust-ncg',options={'maxiter':m_it, 'disp':False},tol=1e-10)
     conved = res.success
     p = res.x
-    se = np.zeros_like(p)
 
     b = p[-1]
-    bse = se[-1]
     stim_filt = p[:-1-d2].reshape([-1,d1])
-    stim_se = se[:-1-d2]
     spk_filt = p[-1-d2:-1]
-    spk_se = se[-1-d2:-1]
     sim_spks = sim_GLM(stim[0],np.squeeze(stim_filt),spk_filt,b,downsample = downsample,n_sims=n_sims)[0]
     train_corr = EVratio(sim_spks,spks,sig)
     train_nnll = res.fun
-    dev = None
     
     if val_stim is not None:
         X_val,y_val = construct_Xdsn(val_stim,val_spks,d,downsample=downsample)
@@ -210,6 +263,13 @@ def fit_GLM(stim,spks,d,val_stim=None,val_spks=None,n_sims=1,sig=5,downsample=No
 
 
 class CellTypesModel:
+	"""
+	A class that uses the 'simultaneous method' to fit a hierarchical model of clustered GLMs 
+	to a dataset of neural spiking responses to stimuli, evaluate the model, and store results in memory.
+	Inputs:
+
+	Outputs:
+	"""
     def __init__(self,stim,spks,d,K,shared_stim=False,family=sm.families.Poisson(),cov_mode='diag',share='W',W_min = -15,hess_alg = 'trust-ncg',m_it_GLM=200,fname='run',reload = False,l2=0.0,downsample=None,sig=5,n_sims=1,**kwargs):
         ###store any additional metadata passed in in kwargs
         for k,v in kwargs.items():
@@ -484,7 +544,7 @@ class CellTypesModel:
                 print('Iteration '+ str(self.iter)+': loss = '+str(self.loss)+', conv = '+str(self.conv))
 
 
-    def val_neurons(self,verbose=True, val_stim=None,val_spks=None,xval=False):
+    def val_neurons(self,verbose=True, val_stim=None,val_spks=None):
         self.val_spikes = [np.sum(y) for y in self.ys]
         K=self.K
         N=self.N
@@ -557,14 +617,12 @@ class CellTypesModel:
         if verbose:
             print("Val_neurons: ", time2-time1, " seconds")
 
-        if not xval:
-            self.set_params()
-        else:
-            try:
-                out_dict[prefix+'_nnlls'] = np.vstack((getattr(self,prefix+'_nnlls'),val_nnlls))
-                out_dict[prefix+'_corrs'] = np.vstack((getattr(self,prefix+'_corrs'),val_corrs))
-            except:
-                pass
+        self.set_params()
+        try:
+            out_dict[prefix+'_nnlls'] = np.vstack((getattr(self,prefix+'_nnlls'),val_nnlls))
+            out_dict[prefix+'_corrs'] = np.vstack((getattr(self,prefix+'_corrs'),val_corrs))
+        except:
+            pass
         self.params.update(out_dict)
         self.save()
 
