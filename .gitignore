@@ -1,0 +1,5 @@
+.DS_Store
+ivscc_data_n12.npz
+cell_types/
+*.out
+*.pyc
