@@ -59,7 +59,6 @@ for share, Wtypes in [('W',True), ('all',False)]:
             seed = si+oracle_seeds
             for ki,K in enumerate(Ks):
                 for wi, Wstd in enumerate(Wstds):
-                    wi = wi if do_ars else wi_ms[wi]
                     D_kek = None
 
                     ### Simultaneous method
@@ -101,24 +100,27 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             BICs[wi][si,ki,1,kfi] = -gmm.bic(betas)
                             VLs[wi][si,ki,1,kfi] = -gmm.score(val_betas)
 
-                    if do_ars:
-                        gmm = GaussianMixture(n_components=K,covariance_type='diag', max_iter=100,n_init=trials)
-                        arss[si,ki,:,wi] = [D['ars'], adjusted_rand_score(gmm.fit_predict(betas),np.tile(np.arange(K),N//K))]
+                    gmm = GaussianMixture(n_components=K,covariance_type='diag', max_iter=100,n_init=trials)
+                    arss[si,ki,:,wi] = [D['ars'], adjusted_rand_score(gmm.fit_predict(betas),np.tile(np.arange(K),N//K))]
 
-                        true_Ws = D['true_betas'][:,d[0]:d[0]+d[1]]
-                        true_Fs = D['true_betas'][:,:d[0]]
+                    true_Ws = D['true_betas'][:,d[0]:d[0]+d[1]]
+                    true_Fs = D['true_betas'][:,:d[0]]
 
-                        Wstd_ests[si,ki,:,wi] = [mrm(D['C_k'][:,W_from_muk_inds,W_from_muk_inds]), mrm(gmm.covariances_[:,W_from_muk_inds,W_from_muk_inds])]
-                        MAD_Ws[si,ki,:,wi] = [rmst(true_Ws,D['Ws']),rmst(true_Ws,D_ind['Ws'])]
-                        MAD_Fs[si,ki,:,wi] = [rmst(true_Fs,np.squeeze(D['Fs'])),rmst(true_Fs,np.squeeze(D_ind['Fs']))]
+                    Wstd_ests[si,ki,:,wi] = [mrm(D['C_k'][:,W_from_muk_inds,W_from_muk_inds]), mrm(gmm.covariances_[:,W_from_muk_inds,W_from_muk_inds])]
+                    MAD_Ws[si,ki,:,wi] = [rmst(true_Ws,D['Ws']),rmst(true_Ws,D_ind['Ws'])]
+                    MAD_Fs[si,ki,:,wi] = [rmst(true_Fs,np.squeeze(D['Fs'])),rmst(true_Fs,np.squeeze(D_ind['Fs']))]
 
                     #example sim
                     if (K==5) and (seed==10) and (wi==0):
-                        simul_sds = np.array([np.sqrt(np.diag(D['C_k'][k])) for k in range(K)])
+                        simul_sds = np.array([np.sqrt(np.diag(D['C_k'][k]))[W_from_muk_inds] for k in range(K)])
                         fig,ax = plt.subplots()
                         hs = []
                         labels = []
-                        for label, means, sds, color in [('True', D['true_mus'], Wstd*np.ones_like(simul_sds), 'k'), ('Simultaneous', D['mu_k'], simul_sds, 'r'), ('Sequential', gmm.means_, np.sqrt(gmm.covariances_),'c')]:
+                        plot_data = [
+                            ('True', D['true_mus'][W_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
+                            ('Simultaneous', D['mu_k'][W_from_muk_inds], simul_sds, 'r'), 
+                            ('Sequential', gmm.means_[W_from_muk_inds], np.sqrt(gmm.covariances_)[W_from_muk_inds],'c')]
+                        for label, means, sds, color in plot_data:
                             h = plt.plot(np.arange(d[1])+1,means.T,color+'-')
                             hs.append(h[0])
                             labels.append(label)
@@ -126,7 +128,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                         plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
                         ax.set_ylim([-4,2])
                         plt.legend(hs,labels,fontsize=14)
-                        plt.savefig(savepath+'example_Omegas.png',bbox_inches='tight')
+                        plt.savefig(savepath+'example_mu_self_share='+share+'.png',bbox_inches='tight')
                         plt.close()
 
                         if Wtypes:
@@ -135,6 +137,26 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             plt.ylabel('$\\beta^\\mathrm{stim}_i$',fontsize=14)
                             plt.xlabel('Time',fontsize=14)
                             plt.savefig(savepath+'example_beta_stim.png',bbox_inches='tight')
+                            plt.close()
+                        else:
+                            F_from_muk_inds = np.arange(d[0])
+                            simul_sds = np.array([np.sqrt(np.diag(D['C_k'][k]))[F_from_muk_inds] for k in range(K)])
+                            fig,ax = plt.subplots()
+                            hs = []
+                            labels = []
+                            plot_data = [
+                                ('True', D['true_mus'][F_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
+                                ('Simultaneous', D['mu_k'][F_from_muk_inds], simul_sds, 'r'), 
+                                ('Sequential', gmm.means_[F_from_muk_inds], np.sqrt(gmm.covariances_)[F_from_muk_inds],'c')]
+                            for label, means, sds, color in plot_data:
+                                h = plt.plot(np.arange(d[1])+1,means.T,color+'-')
+                                hs.append(h[0])
+                                labels.append(label)
+                            plt.xlabel('Time',fontsize=14)
+                            plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
+                            ax.set_ylim([-4,2])
+                            plt.legend(hs,labels,fontsize=14)
+                            plt.savefig(savepath+'example_mu_stim.png',bbox_inches='tight')
                             plt.close()
 
         np.savez('../summary_files/sim_plot_data_share_'+share,arss=arss,MAD_Ws=MAD_Ws,MAD_Fs=MAD_Fs,Wstd_ests=Wstd_ests,BICs=BICs,Wstds=Wstds,Ks=Ks,Kfits=Kfits,VLs=VLs)

@@ -193,36 +193,41 @@ def main_data():
                     val_corrs[n].append(val_corr)
             np.savez(fname,train_nnlls=train_nnlls,train_corrs=train_corrs,val_nnlls=val_nnlls,val_corrs=val_corrs,Fs=Fs,Ws=Ws,bs=bs,TL=TL,Tc=Tc,neuron_inds=neurons)
         squelch = lambda x: np.vstack([x_i[0].reshape(1,-1) for x_i in x])
+
+        D_ind = dict(np.load(fname+'.npz',allow_pickle=True))
+        ind_p = np.hstack([squelch(D_ind['Fs']),squelch(D_ind['Ws']),squelch(D_ind['bs'])])
+
         if not val_bins:
-            D_ind = dict(np.load(fname+'.npz',allow_pickle=True))
-            ind_p = np.hstack([squelch(D_ind['Fs']),squelch(D_ind['Ws']),squelch(D_ind['bs'])])
             D_ind['ind_p'] = ind_p[neurons,:]
             np.savez(fname,**D_ind)
-            ctm = CellTypesModel([np.empty((1,1))],[np.empty((1,))],d,K,shared_stim=False,dsns=True,fname=fname,share=share,reload=True,l2=l2s_stim[l2_stim_i],downsample=downsample,W_min = -np.inf,n_sims=n_sims)
-            ctm.initialize(m_it_GMM=2000,n_init=trials)
+        ctm = CellTypesModel(d,K,shared_stim=False,fname=fname,share=share,reload=True,l2=l2s_stim[l2_stim_i],downsample=downsample,W_min = -np.inf,n_sims=n_sims)
+
+        if not val_bins:
+            ctm.fit_GMM(m_it_GMM=2000,n_init=trials)
             ctm.set_params()
             ctm.save()
         if not all_n:
             all_stim_valn = [[stim[n][t] for t in tr_trials[n]] for n in val_neurons]
             all_spks_valn = [[binned_spikes[n][t] for t in tr_trials[n]] for n in val_neurons]
-            ctm = CellTypesModel(all_stim_valn,all_spks_valn,d,K,shared_stim=False,fname=fname,share=share,reload=True,l2=l2s_stim[l2_stim_i],downsample=downsample,W_min = -np.inf,n_sims=n_sims)
-            ctm.val_neurons()
+            # ctm.val_neurons(all_stim_valn,all_spks_valn) #can be used to evaluate the loss of the hierarchical model on sequential GMM
             ctm.Q_beta(ind_p[val_neurons,:],'Q_val')
             
     else:
         reload = os.path.isfile(fname+'.npz')
         train_stim = [[stim[n][t] for t in tr_trials[n]] for n in neurons]
         train_spks = [[binned_spikes[n][t] for t in tr_trials[n]] for n in neurons]
-        ctm = CellTypesModel(train_stim,train_spks,d,K,shared_stim=False,fname=fname,share=share,reload=reload,neuron_inds=neurons,l2=l2,downsample=downsample,n_sims=n_sims)  
-        ctm.fit(max_it=200,n_init=1)
+        ctm = CellTypesModel(d,K,shared_stim=False,fname=fname,share=share,reload=reload,neuron_inds=neurons,l2=l2,downsample=downsample,n_sims=n_sims)  
         if val_bins:
-            ctm.results(val_stim=[[stim[n][val_trials[n]]] for n in neurons],val_spks=[[binned_spikes[n][val_trials[n]]] for n in neurons])
+            val_stim=[[stim[n][val_trials[n]]] for n in neurons]
+            val_spks=[[binned_spikes[n][val_trials[n]]] for n in neurons]
         else:
-            ctm.results(val_stim=[test_stim[n] for n in neurons],val_spks=[test_spikes[n] for n in neurons])
-            if val_neurons.size>0:
-                ctm = CellTypesModel([[stim[n][t] for t in tr_trials[n]] for n in val_neurons],[[binned_spikes[n][t] for t in tr_trials[n]] for n in val_neurons],d,K,shared_stim=False,fname=fname,share=share,reload=True,l2=l2,downsample=downsample,n_sims=n_sims)  
-                ctm.val_neurons(val_stim=[test_stim[n] for n in val_neurons],val_spks=[test_spikes[n] for n in val_neurons])
-    print('Done; ', fname)
+            val_stim=[test_stim[n] for n in neurons]
+            val_spks=[test_spikes[n] for n in neurons]
+        ctm.fit(train_stim,train_spks,max_it=200,n_init=1,val_stim=val_stim,val_spks=val_spks)
+        if not val_bins and val_neurons.size>0:
+            ctm.val_neurons([stim[n] for n in val_neurons],[binned_spikes[n] for n in val_neurons],val_stim=[test_stim[n] for n in val_neurons],val_spks=[test_spikes[n] for n in val_neurons])
+
+            print('Done; ', fname)
     return True
 
 
@@ -354,17 +359,16 @@ def main_sim():
     if not seq_method:
         fname = 'ivscc_gmmglm_simulations_reg'+'_Wtypes'*Wtypes+'_share_'+share+'_K='+str(K)+'_Kfit='+str(Kfit)+'_trial='+str(trial)+'_seed='+str(seed)+'_1000Wstd='+str(int(1000*Wstd))+'_100delta='+str(int(100*delta))+('_l2i='+str(l2_i))*oracle+'_alg='+alg
         reload = val_neurons #os.path.isfile(fname+'.npz')
-        ctm = CellTypesModel(sim_stim,sim_spikes,d,Kfit,hess_alg=alg,shared_stim=False,cov_mode='diag',fname=fname,share=share,reload=reload,l2=l2s[l2_i],downsample=downsample)
+        ctm = CellTypesModel(d,Kfit,hess_alg=alg,shared_stim=False,cov_mode='diag',fname=fname,share=share,reload=reload,l2=l2s[l2_i],downsample=downsample)
            
         if not val_neurons:
-            ctm.fit(max_it=200,n_init=1,tol=1e-6)
-            D = ctm.results()
+            D = ctm.fit(sim_stim,sim_spikes,max_it=200,n_init=1,tol=1e-6)
             D['ars'] = adjusted_rand_score(np.argmax(D['Q'],axis=1),np.tile(np.arange(K),N//K))
             D['true_mus'] = true_mus
             D['true_betas'] = true_betas
             np.savez(fname,**D)
         else:
-           ctm.val_neurons()
+           ctm.val_neurons(sim_stim,sim_spikes)
         print('Done!', fname)
 
     ### Sequential method

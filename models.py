@@ -270,24 +270,25 @@ class CellTypesModel:
 
 	Outputs:
 	"""
-    def __init__(self,stim,spks,d,K,shared_stim=False,family=sm.families.Poisson(),cov_mode='diag',share='W',W_min = -15,hess_alg = 'trust-ncg',m_it_GLM=200,fname='run',reload = False,l2=0.0,downsample=None,sig=5,n_sims=1,**kwargs):
-        ###store any additional metadata passed in in kwargs
+    def __init__(self,d,K,shared_stim=False,family=sm.families.Poisson(),cov_mode='diag',share='W',W_min = -15,hess_alg = 'trust-ncg',m_it_GLM=200,fname='run',reload = False,l2=0.0,downsample=None,sig=5,n_sims=1,**kwargs):
+        self.conv = np.inf
+        self.losses = []
+        self.convs = []
+        self.iter = 0
+        self.ind_mus = np.zeros((N,K,d_s))
+        self.ind_sig2s = np.ones((N,K,d_s,d_s))
+        self.Q = np.zeros((N,K))
+        
+        ### Load attriutes from file and kwargs, if present
+        if reload:
+            self.load(dict(np.load(fname+'.npz',allow_pickle=True)))
+        try:
+            self.gmm_seq = self.gmm_seq[()]
+        except:
+            pass
         for k,v in kwargs.items():
             setattr(self,k,v)
-        N = len(spks) if type(spks) is list else spks.shape[0]
-        #create design matrices
-        X_dsns = []
-        ys = []
-        for n in range(N):
-            if shared_stim:
-                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=downsample)
-            else:
-                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=downsample)
-            X_dsns.append(X_dsn)
-            ys.append(y)
-
-        T_dsns = [X_dsns[n].shape[0] for n in range(N)]
-        L_dsn = X_dsns[-1].shape[1]
+        
 
         #indices of shared params
         if share=='W':
@@ -296,40 +297,15 @@ class CellTypesModel:
             shared_i = np.arange(L_dsn)         #all
         if share=='bW':
             shared_i = np.arange(d[0],L_dsn)    #b and W
-
         d_s = shared_i.size
         shared_i2 = (np.repeat(shared_i,d_s),np.tile(shared_i,d_s))
+
         reg_i = np.setdiff1d(np.arange(L_dsn-1),shared_i)
         d_r = reg_i.size
         reg_i2 = (np.repeat(reg_i,d_r),np.tile(reg_i,d_r))
+        self.l2 = l2           
 
-        self.ind_mus = np.zeros((N,K,d_s))
-        self.ind_sig2s = np.ones((N,K,d_s,d_s))
-        self.Q = np.zeros((N,K))
-        self.l2 = l2
 
-        if not reload:
-            ind_p = np.random.rand(N,L_dsn)
-            self.train_spikes = [np.sum(y) for y in ys]
-            for n in range(N):
-                model =  sm.GLM(ys[n],X_dsns[n],family = family)
-                fun = lambda p: -model.loglike(p)/ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
-                jac = lambda p: -model.score(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
-                hess = lambda p: -model.hessian(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
-                res = minimize(fun,np.random.rand(L_dsn),jac=jac,hess=hess,method=hess_alg,options={'maxiter':m_it_GLM, 'disp':False},tol=1e-6)
-                ind_p[n,:] = res.x #np.maximum(res.x,W_min)
-            self.ind_p = ind_p
-            self.iter = 0
-
-        self.conv = np.inf
-        self.losses = []
-        self.convs = []
-        if reload:
-            self.load(dict(np.load(fname+'.npz',allow_pickle=True)))
-        try:
-            self.gmm_seq = self.gmm_seq[()]
-        except:
-            pass
         self.downsample=downsample
         self.sig=sig
         self.n_sims = n_sims
@@ -345,8 +321,6 @@ class CellTypesModel:
         self.L_dsn=L_dsn
         self.K = K
         self.N = N
-        self.X_dsns=X_dsns
-        self.ys = ys
         self.d_s = d_s
         self.d = d
         self.shared_i = shared_i
@@ -359,7 +333,11 @@ class CellTypesModel:
         self.time = os.times()[-1]
         self.start_time = self.time
         self.family = family
+        self.reload = reload
+
+
         self.set_params()
+
 
 
     def load(self,D):
@@ -392,7 +370,29 @@ class CellTypesModel:
         self.save()
 
 
-    def initialize(self,m_it_GMM=100,n_init=10):
+    def fit_GLMs(self,X_dsns,ys):
+    	N = len(X_dsns)
+        T_dsns=self.T_dsns
+        L_dsn=self.L_dsn
+    	d_s = self.d_s
+        shared_i = self.shared_i
+        shared_i2 = self.shared_i2
+        d_r = self.d_r
+        reg_i = self.reg_i
+        reg_i2 = self.reg_i2
+
+        ind_p = np.random.rand(N,L_dsn)
+        for n in range(N):
+            model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
+            fun = lambda p: -model.loglike(p)/ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
+            jac = lambda p: -model.score(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
+            hess = lambda p: -model.hessian(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
+            res = minimize(fun,np.random.rand(L_dsn),jac=jac,hess=hess,method=self.hess_alg,options={'maxiter':m_it_GLM, 'disp':False},tol=1e-6)
+            ind_p[n,:] = res.x
+        self.ind_p = ind_p
+
+
+    def fit_GMM(self,m_it_GMM=100,n_init=10):
         K=self.K
         gmm = GaussianMixture(n_components=K,covariance_type=self.cov_mode, max_iter=m_it_GMM,n_init=n_init)
         gmm.fit(np.maximum(self.ind_p[:,self.shared_i],self.W_min))
@@ -413,9 +413,9 @@ class CellTypesModel:
         self.gmm_seq = gmm
 
 
-    def update(self,verbose=True):
+    def update(self,X_dsns,ys,verbose=True):
         K=self.K
-        N=self.N
+        N=len(X_dsns)
         T_dsns=self.T_dsns
         L_dsn=self.L_dsn
         d_s = self.d_s
@@ -430,21 +430,21 @@ class CellTypesModel:
         time1 = time.time()
         good_Ks = np.arange(K)[~np.array(self.bad)]
         for n in range(N):
-            model =  sm.GLM(self.ys[n],self.X_dsns[n],family = self.family)
+            model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
             for k in good_Ks:
-                fun = lambda p: -(model.loglike(p)-(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k]).dot((p[shared_i]-self.mu_k[k,:]).T)/2)/self.ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
-                jac = lambda p: -(model.score(p)-self.put(np.zeros_like(p),shared_i,(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k])))/self.ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
-                hess = lambda p: -(model.hessian(p)-(self.put(np.zeros((L_dsn,L_dsn)),shared_i2,self.P_k[k])))/self.ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
+                fun = lambda p: -(model.loglike(p)-(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k]).dot((p[shared_i]-self.mu_k[k,:]).T)/2)/ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
+                jac = lambda p: -(model.score(p)-self.put(np.zeros_like(p),shared_i,(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k])))/ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
+                hess = lambda p: -(model.hessian(p)-(self.put(np.zeros((L_dsn,L_dsn)),shared_i2,self.P_k[k])))/ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
                 res = minimize(fun,self.p[n,k,:],jac=jac,hess=hess,method=self.hess_alg,options={'maxiter':self.m_it_GLM,'disp':False},tol=1e-6)
                 
-                self.ind_mus[n,k,:] = res.x[shared_i] #np.maximum(res.x[shared_i],self.W_min)
-                self.p[n,k,:] = res.x #np.maximum(res.x,self.W_min)
+                self.ind_mus[n,k,:] = res.x[shared_i] 
+                self.p[n,k,:] = res.x 
                 if self.cov_mode=='diag':
-                    C = np.diag(1.0/(np.diag(res.hess)*self.ys[n].size+1e-300))
+                    C = np.diag(1.0/(np.diag(res.hess)*ys[n].size+1e-300))
                 else:
-                    C = np.linalg.inv(res.hess*self.ys[n].size)+1e-300*np.eye(L_dsn)
+                    C = np.linalg.inv(res.hess*ys[n].size)+1e-300*np.eye(L_dsn)
                 self.ind_sig2s[n,k,:,:] = C[shared_i,:][:,shared_i]
-                logposts[n,k] = -(res.fun)*self.ys[n].size - 1/2*np.log(self.detC_k[k]+1e-300) + 1/2*np.log(np.linalg.det(C)+1e-300) + np.log(self.wts[k]+1e-300) + 1/2*d_r*np.log(self.l2*self.ys[n].size+1e-300) #steepest descent approx
+                logposts[n,k] = -(res.fun)*ys[n].size - 1/2*np.log(self.detC_k[k]+1e-300) + 1/2*np.log(np.linalg.det(C)+1e-300) + np.log(self.wts[k]+1e-300) + 1/2*d_r*np.log(self.l2*ys[n].size+1e-300) #steepest descent approx
             Qz = np.exp(logposts[n,:]-np.max(logposts[n,:]))
             Qz[self.bad] = 0
             self.Q[n,:] = Qz/(np.sum(Qz)+1e-300)
@@ -485,7 +485,25 @@ class CellTypesModel:
             print("M-Step: ", time3-time2, " seconds")
 
 
-    def fit(self,n_init=1,max_it=5,m_it_GMM=100,tol=1e-5,verbose=True):
+    def fit(self,stim,spks,n_init=1,max_it=5,m_it_GMM=100,tol=1e-5,verbose=True,results=True,val_stim=None,val_spks=None):
+		N = len(spks) if type(spks) is list else spks.shape[0]
+
+        #create design matrices
+        X_dsns = []
+        ys = []
+        for n in range(N):
+            if shared_stim:
+                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=downsample)
+            else:
+                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=downsample)
+            X_dsns.append(X_dsn)
+            ys.append(y)
+
+        T_dsns = [X_dsns[n].shape[0] for n in range(N)]
+        L_dsn = X_dsns[-1].shape[1]
+        self.train_spikes = [np.sum(y) for y in ys]
+
+    	self.fit_GLMs(X_dsns,ys)
 
         if self.iter == 0:
             if verbose:
@@ -496,7 +514,7 @@ class CellTypesModel:
             best_params = {}
             self.iter = 1
             for init in range(n_init):
-                self.initialize(m_it_GMM=100)
+                self.fit_GMM(m_it_GMM=100)
                 self.update(verbose=verbose)# could update multiple times if desired
                 if verbose:
                     print('Init '+ str(init)+': loss = '+str(self.loss))
@@ -516,7 +534,7 @@ class CellTypesModel:
             Ck_old = np.array(self.C_k)
             Q_old = np.array(self.Q)
             wts_old = np.array(self.wts)
-            self.update(verbose=verbose)
+            self.update(X_dsns,ys,verbose=verbose)
             self.iter += 1
             self.set_params()
             self.save()
@@ -543,11 +561,61 @@ class CellTypesModel:
             if verbose:
                 print('Iteration '+ str(self.iter)+': loss = '+str(self.loss)+', conv = '+str(self.conv))
 
+        if results:
+        	self.results(stim,X_dsns,ys,val_stim=val_stim,val_spks=val_spks)
 
-    def val_neurons(self,verbose=True, val_stim=None,val_spks=None):
-        self.val_spikes = [np.sum(y) for y in self.ys]
+	def results(self,stim,X_dsns,ys,val_stim=None,val_spks=None,prefix='val'):
         K=self.K
-        N=self.N
+        N=len(X_dsns)
+        T_dsns=self.T_dsns
+        L_dsn=self.L_dsn
+        d_s = self.d_s
+        d=self.d
+
+        p_MAP = np.zeros((N,L_dsn))
+        train_nnlls = np.zeros((N,))
+        train_corrs = np.zeros((N,))
+        for n in range(N):
+            model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
+            k = np.argmax(self.Q[n,:])
+            p_MAP[n,:] = self.p[n,k,:]
+            train_nnlls[n] = -model.loglike(p_MAP[n,:])/T_dsns[n]
+            sim_spks = sim_GLM(stim[n][0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
+            train_corrs[n] = EVratio(sim_spks,self.spks[n],self.sig)
+
+
+        if self.cov_mode=='full':
+            BIC = -self.loss*np.sum(T_dsns)-1/2*(K*(1+d_s+d_s**2)-1)*np.log(N)
+        else:
+            BIC = -self.loss*np.sum(T_dsns)-1/2*(K*(1+d_s+d_s)-1)*np.log(N)
+
+        out_dict = dict(BIC=BIC,
+                        Fs=p_MAP[:,:-1-d[1]],Ws=p_MAP[:,-1-d[1]:-1],bs=p_MAP[:,-1],
+                        mu_k=self.mu_k,C_k=self.C_k,Q=self.Q,pi=self.wts,p=self.p,
+                        train_nnlls=train_nnlls,train_corrs=train_corrs)
+
+        if val_stim is not None:
+            self.val_spikes = [np.sum(y) for y in val_spks]
+            val_nnlls = np.zeros((N,))
+            val_corrs = np.zeros((N,))
+            for n in range(N):
+                vsn = val_stim if self.shared_stim else val_stim[n]
+                X_dsn, y = construct_Xdsn(vsn,val_spks[n],d,downsample=self.downsample)
+                sim_val_spks = sim_GLM(vsn[0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
+                val_model = sm.GLM(y,X_dsn,family = self.family)
+                val_corrs[n] = EVratio(sim_val_spks,val_spks[n],self.sig)
+                val_nnlls[n] = -val_model.loglike(p_MAP[n,:])/(y.size)
+                out_dict[prefix+'_nnlls'] = val_nnlls
+                out_dict[prefix+'_corrs'] = val_corrs
+        self.set_params()
+        out_dict.update(self.params)
+        np.savez(self.fname,**out_dict)
+        return(out_dict)
+
+
+    def val_neurons(self,stim,spks,verbose=True, val_stim=None,val_spks=None):
+        self.val_spikes = [np.sum(y) for y in ys]
+        K=self.K
         T_dsns=self.T_dsns
         L_dsn=self.L_dsn
         d=self.d
@@ -557,6 +625,7 @@ class CellTypesModel:
         d_r = self.d_r
         reg_i = self.reg_i
         reg_i2 = self.reg_i2
+
         logposts = -np.inf*np.ones((N,K))
         self.Q_val = np.zeros((N,K))
         self.p_val = np.zeros((N,K,L_dsn))
@@ -565,24 +634,38 @@ class CellTypesModel:
         self.val_neurons_train_corrs = np.zeros((N,))
         self.val_neurons_train_nnlls = np.zeros((N,))
 
+        N = len(spks) if type(spks) is list else spks.shape[0]
+
+        #create design matrices
+        X_dsns = []
+        ys = []
+        for n in range(N):
+            if shared_stim:
+                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=downsample)
+            else:
+                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=downsample)
+            X_dsns.append(X_dsn)
+            ys.append(y)
+
+
         time1 = time.time()
         good_Ks = np.arange(K)[~np.array(self.bad)]
         for n in range(N):
-            model =  sm.GLM(self.ys[n],self.X_dsns[n],family = self.family)
+            model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
             for k in good_Ks:
-                fun = lambda p: -(model.loglike(p)-(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k]).dot((p[shared_i]-self.mu_k[k,:]).T)/2)/self.ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
-                jac = lambda p: -(model.score(p)-self.put(np.zeros_like(p),shared_i,(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k])))/self.ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
-                hess = lambda p: -(model.hessian(p)-(self.put(np.zeros((L_dsn,L_dsn)),shared_i2,self.P_k[k])))/self.ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
+                fun = lambda p: -(model.loglike(p)-(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k]).dot((p[shared_i]-self.mu_k[k,:]).T)/2)/ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
+                jac = lambda p: -(model.score(p)-self.put(np.zeros_like(p),shared_i,(p[shared_i]-self.mu_k[k,:]).dot(self.P_k[k])))/ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
+                hess = lambda p: -(model.hessian(p)-(self.put(np.zeros((L_dsn,L_dsn)),shared_i2,self.P_k[k])))/ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
                 res = minimize(fun,np.random.rand(L_dsn),jac=jac,hess=hess,method=self.hess_alg,options={'maxiter':self.m_it_GLM,'disp':False},tol=1e-6)
 
-                self.ind_mus_val[n,k,:] = res.x[shared_i] #np.maximum(res.x[shared_i],self.W_min)
-                self.p_val[n,k,:] = res.x #np.maximum(res.x,self.W_min)
+                self.ind_mus_val[n,k,:] = res.x[shared_i] 
+                self.p_val[n,k,:] = res.x 
                 if self.cov_mode=='diag':
-                    C = np.diag(1.0/(np.diag(res.hess)*self.ys[n].size+1e-300))
+                    C = np.diag(1.0/(np.diag(res.hess)*ys[n].size+1e-300))
                 else:
-                    C = np.linalg.inv(res.hess*self.ys[n].size)+1e-300*np.eye(L_dsn)
+                    C = np.linalg.inv(res.hess*ys[n].size)+1e-300*np.eye(L_dsn)
                 self.ind_sig2s_val[n,k,:,:] = C[shared_i,:][:,shared_i]
-                logposts[n,k] = -(res.fun)*self.ys[n].size - 1/2*np.log(self.detC_k[k]+1e-300) + 1/2*np.log(np.linalg.det(C)+1e-300) + np.log(self.wts[k]+1e-300) + 1/2*d_r*np.log(self.l2*self.ys[n].size+1e-300) #steepest descent approx
+                logposts[n,k] = -(res.fun)*ys[n].size - 1/2*np.log(self.detC_k[k]+1e-300) + 1/2*np.log(np.linalg.det(C)+1e-300) + np.log(self.wts[k]+1e-300) + 1/2*d_r*np.log(self.l2*ys[n].size+1e-300) #steepest descent approx
             Qz = np.exp(logposts[n,:]-np.max(logposts[n,:]))
             Qz[self.bad] = 0
             self.Q_val[n,:] = Qz/(np.sum(Qz)+1e-300)
@@ -592,7 +675,7 @@ class CellTypesModel:
         self.p_MAP_val = self.p_val[np.arange(N),np.argmax(self.Q_val,axis=1)]
         self.gmm_TLs = self.gmm_seq.score_samples(self.p_MAP_val[:,shared_i])
         for n in range(N):
-            model =  sm.GLM(self.ys[n],self.X_dsns[n],family = self.family)
+            model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
             self.val_neurons_train_nnlls[n] = -model.loglike(self.p_MAP_val[n,:])/T_dsns[n]
             sim_spks = sim_GLM(self.stim[n][0],self.p_MAP_val[n,:-1-d[1]],self.p_MAP_val[n,-1-d[1]:-1],self.p_MAP_val[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
             self.val_neurons_train_corrs[n] = EVratio(sim_spks,self.spks[n],self.sig)
@@ -627,53 +710,7 @@ class CellTypesModel:
         self.save()
 
 
-    def results(self,val_stim=None,val_spks=None,prefix='val'):
-        K=self.K
-        N=self.N
-        T_dsns=self.T_dsns
-        L_dsn=self.L_dsn
-        d_s = self.d_s
-        d=self.d
-
-        p_MAP = np.zeros((N,L_dsn))
-        train_nnlls = np.zeros((N,))
-        train_corrs = np.zeros((N,))
-        for n in range(N):
-            model =  sm.GLM(self.ys[n],self.X_dsns[n],family = self.family)
-            k = np.argmax(self.Q[n,:])
-            p_MAP[n,:] = self.p[n,k,:]
-            train_nnlls[n] = -model.loglike(p_MAP[n,:])/T_dsns[n]
-            sim_spks = sim_GLM(self.stim[n][0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
-            train_corrs[n] = EVratio(sim_spks,self.spks[n],self.sig)
-
-
-        if self.cov_mode=='full':
-            BIC = -self.loss*np.sum(T_dsns)-1/2*(K*(1+d_s+d_s**2)-1)*np.log(N)
-        else:
-            BIC = -self.loss*np.sum(T_dsns)-1/2*(K*(1+d_s+d_s)-1)*np.log(N)
-
-        out_dict = dict(BIC=BIC,
-                        Fs=p_MAP[:,:-1-d[1]],Ws=p_MAP[:,-1-d[1]:-1],bs=p_MAP[:,-1],
-                        mu_k=self.mu_k,C_k=self.C_k,Q=self.Q,pi=self.wts,p=self.p,
-                        train_nnlls=train_nnlls,train_corrs=train_corrs)
-
-        if val_stim is not None:
-            self.val_spikes = [np.sum(y) for y in val_spks]
-            val_nnlls = np.zeros((N,))
-            val_corrs = np.zeros((N,))
-            for n in range(N):
-                vsn = val_stim if self.shared_stim else val_stim[n]
-                X_dsn, y = construct_Xdsn(vsn,val_spks[n],d,downsample=self.downsample)
-                sim_val_spks = sim_GLM(vsn[0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
-                val_model = sm.GLM(y,X_dsn,family = self.family)
-                val_corrs[n] = EVratio(sim_val_spks,val_spks[n],self.sig)
-                val_nnlls[n] = -val_model.loglike(p_MAP[n,:])/(y.size)
-                out_dict[prefix+'_nnlls'] = val_nnlls
-                out_dict[prefix+'_corrs'] = val_corrs
-        self.set_params()
-        out_dict.update(self.params)
-        np.savez(self.fname,**out_dict)
-        return(out_dict)
+    
 
 
 
