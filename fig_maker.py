@@ -106,7 +106,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                     true_Ws = D['true_betas'][:,d[0]:d[0]+d[1]]
                     true_Fs = D['true_betas'][:,:d[0]]
 
-                    Wstd_ests[si,ki,:,wi] = [mrm(D['C_k'][:,W_from_muk_inds,W_from_muk_inds]), mrm(gmm.covariances_[:,W_from_muk_inds,W_from_muk_inds])]
+                    Wstd_ests[si,ki,:,wi] = [mrm(D['C_k'][:,W_from_muk_inds,W_from_muk_inds]), mrm(gmm.covariances_[:,W_from_muk_inds])]
                     MAD_Ws[si,ki,:,wi] = [rmst(true_Ws,D['Ws']),rmst(true_Ws,D_ind['Ws'])]
                     MAD_Fs[si,ki,:,wi] = [rmst(true_Fs,np.squeeze(D['Fs'])),rmst(true_Fs,np.squeeze(D_ind['Fs']))]
 
@@ -117,14 +117,14 @@ for share, Wtypes in [('W',True), ('all',False)]:
                         hs = []
                         labels = []
                         plot_data = [
-                            ('True', D['true_mus'][W_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
-                            ('Simultaneous', D['mu_k'][W_from_muk_inds], simul_sds, 'r'), 
-                            ('Sequential', gmm.means_[W_from_muk_inds], np.sqrt(gmm.covariances_)[W_from_muk_inds],'c')]
+                            ('True', D['true_mus'][:,W_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
+                            ('Simultaneous', D['mu_k'][:,W_from_muk_inds], simul_sds, 'r'), 
+                            ('Sequential', gmm.means_[:,W_from_muk_inds], np.sqrt(gmm.covariances_)[:,W_from_muk_inds],'c')]
                         for label, means, sds, color in plot_data:
-                            h = plt.plot(np.arange(d[1])+1,means.T,color+'-')
+                            h = plt.plot(np.arange(d[1]+1)*dt,means.T,color+'-')
                             hs.append(h[0])
                             labels.append(label)
-                        plt.xlabel('Time',fontsize=14)
+                        plt.xlabel('Time (s)',fontsize=14)
                         plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
                         ax.set_ylim([-4,2])
                         plt.legend(hs,labels,fontsize=14)
@@ -133,9 +133,9 @@ for share, Wtypes in [('W',True), ('all',False)]:
 
                         if Wtypes:
                             fig,ax = plt.subplots()
-                            plt.plot(np.arange(d[0])*downsample,D['true_betas'][0,:d[0]],'k')
+                            plt.plot(np.arange(d[0])*downsample*dt,D['true_betas'][0,:d[0]],'k')
                             plt.ylabel('$\\beta^\\mathrm{stim}_i$',fontsize=14)
-                            plt.xlabel('Time',fontsize=14)
+                            plt.xlabel('Time (s)',fontsize=14)
                             plt.savefig(savepath+'example_beta_stim.png',bbox_inches='tight')
                             plt.close()
                         else:
@@ -145,14 +145,14 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             hs = []
                             labels = []
                             plot_data = [
-                                ('True', D['true_mus'][F_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
-                                ('Simultaneous', D['mu_k'][F_from_muk_inds], simul_sds, 'r'), 
-                                ('Sequential', gmm.means_[F_from_muk_inds], np.sqrt(gmm.covariances_)[F_from_muk_inds],'c')]
+                                ('True', D['true_mus'][:,F_from_muk_inds], Wstd*np.ones_like(simul_sds), 'k'),
+                                ('Simultaneous', D['mu_k'][:,F_from_muk_inds], simul_sds, 'r'), 
+                                ('Sequential', gmm.means_[:,F_from_muk_inds], np.sqrt(gmm.covariances_)[:,F_from_muk_inds],'c')]
                             for label, means, sds, color in plot_data:
-                                h = plt.plot(np.arange(d[1])+1,means.T,color+'-')
+                                h = plt.plot(np.arange(d[0])*downsample*dt,means.T,color+'-')
                                 hs.append(h[0])
                                 labels.append(label)
-                            plt.xlabel('Time',fontsize=14)
+                            plt.xlabel('Time (s)',fontsize=14)
                             plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
                             ax.set_ylim([-4,2])
                             plt.legend(hs,labels,fontsize=14)

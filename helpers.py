@@ -7,7 +7,7 @@ def rms(x):
 
 
 def rmst(true,est,thresh=-4): 
-    return rms(np.ravel(true)-np.ravel(est)[np.ravel(true)>thresh])
+    return rms((np.ravel(true)-np.ravel(est))[np.ravel(true)>thresh])
 
 
 def mrm(x):
