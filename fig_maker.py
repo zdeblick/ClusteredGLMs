@@ -207,12 +207,13 @@ for share, Wtypes in [('W',True), ('all',False)]:
 
         K_means = np.zeros((len(Ks),2))
         K_sems = np.zeros((len(Ks),2))
-        for ki in range(len(Ks)):
+        plt_sem = np.nanstd(data,axis=0)/np.sqrt(np.sum(np.isfinite(data),axis=0))
+        for ki,K in enumerate(Ks):
             for meth in range(nmeth):
                 if is_bic:
                     K_sel = Kfits[np.nanargmax(data[:,ki,meth,:],axis=-1)]
                 else:
-                    N = 40*Ks[ki]
+                    N = 40*K
                     se = 1.0*np.stack([plt_sem[ki,meth,:]]*seeds,axis=0)*np.sqrt(50)
                     K_sel = np.min(Kfits+1e300*(data[:,ki,meth,:]>np.min(data[:,ki,meth,:],axis=-1,keepdims=True)+se[np.argmin(data[:,ki,meth,:],axis=-1)]),axis=-1)
                 a,_ = np.histogram(K_sel,bins=np.arange(Kfits[-1]+1)+0.5,density=True)
@@ -382,6 +383,7 @@ for share in ['W','all']:
         simul_data = np.stack([np.array(simul_mets[Ki][i])-np.array(simul_mets[0][i]) for Ki in range(Kfits.size)],axis=0)
         print(names[i],simul_data.shape)
         for f in range(simul_data.shape[-1]):
+            print(simul_data.shape,i)
             h1 = plt.errorbar(Kfits-0.15+0.1*f,np.nanmean(simul_data,axis=(1,2))[:,f],yerr=np.nanstd(simul_data,axis=(1,2))[:,f]/np.sqrt(np.sum(np.isfinite(simul_data[:,:,:,f]),axis=(1,2))))
 
         ax.set_xticks(Kfits)
