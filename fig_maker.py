@@ -505,13 +505,13 @@ for share in ['W','all']:
         BICs-=np.max(BICs)
         np.savez('../summary_files/BIC_allN_share='+share,simulBICs=BICs)
     simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
-    K_max=np.argmax(np.max(simulBICs,axis=1)) #replace with specific K to generate plots for other K
+    K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))] #replace with specific K to generate plots for other K
     trial_max = np.argmax(simulBICs[Kfits==K_max,:])
     
 
     fig,ax = plt.subplots()
-    ax.plot(Kfits,BICs,'o',c=colors[0])
-    ax.plot(Kfits,np.max(BICs,axis=1),c=colors[0])
+    ax.plot(Kfits,simulBICs,'o',c=colors[0])
+    ax.plot(Kfits,np.max(simulBICs,axis=1),c=colors[0])
     ax.set_ylim([-1600,100])
     ax.set_xticks(Kfits)
     ax.set_xlabel('K',fontsize=14)
@@ -537,7 +537,7 @@ for share in ['W','all']:
 
 
     fig,ax = plt.subplots()
-    ax.plot(Kfits,BICs,c=colors[0])
+    ax.plot(Kfits,seqBICs,c=colors[0])
     ax.set_xticks(Kfits)
     plt.xlabel('$K$',fontsize=14)
     ax.set_ylabel('BIC on train neurons',fontsize=14,c=colors[0])
@@ -663,9 +663,9 @@ for share in ['W']: #we haven't done these analyses for case B yet
                             for subi2 in range(subi):
                                 ARS.append(adjusted_rand_score(cts[:,tri,sli,subi,mi],cts[:,tri,sli,subi2,mi]))
                         arss[:len(ARS),tri,sli,mi] = ARS
-        np.savez('summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
+        np.savez('../summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
 
-    D = np.load('summary_files/ivscc_scaling_data.npz')
+    D = np.load('../summary_files/ivscc_scaling_data.npz')
     tn_nnlls = D['tn_nnlls']
     tn_corrs = D['tn_corrs']
     vn_nnlls = D['vn_nnlls']
