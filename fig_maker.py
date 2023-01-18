@@ -10,6 +10,7 @@ from sklearn.metrics import confusion_matrix, pairwise_distances, adjusted_rand_
 from sklearn.mixture import GaussianMixture
 from scipy.stats import multivariate_normal
 from scipy.optimize import linear_sum_assignment
+from itertools import combinations
 from helpers import *
 
 import colorcet as cc
@@ -264,6 +265,8 @@ for share in ['W','all']:
 
     ### Figures!!!
     for subsub in [True,False] if run else []:
+        if share=='all' and subsub:
+            continue
         l2_is = np.array([0]) if share=='all' or subsub else np.arange(-2,2)
         nl2s = l2_is.size
 
@@ -383,7 +386,6 @@ for share in ['W','all']:
         simul_data = np.stack([np.array(simul_mets[Ki][i])-np.array(simul_mets[0][i]) for Ki in range(Kfits.size)],axis=0)
         print(names[i],simul_data.shape)
         for f in range(simul_data.shape[-1]):
-            print(simul_data.shape,i)
             h1 = plt.errorbar(Kfits-0.15+0.1*f,np.nanmean(simul_data,axis=(1,2))[:,f],yerr=np.nanstd(simul_data,axis=(1,2))[:,f]/np.sqrt(np.sum(np.isfinite(simul_data[:,:,:,f]),axis=(1,2))))
 
         ax.set_xticks(Kfits)
@@ -492,16 +494,19 @@ for share in ['W','all']:
 
     ### Figures !!!
     #Simultaneous
-    BICs = np.nan*np.ones((Kfits.size,trials))
-    for Ki, K in enumerate(Kfits):
-        for trial in range(trials):
-            D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial)+'_K='+str(K)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
-            if np.any(D['bad']):
-                print('bad',K,trial)
-            BICs[Ki,trial] = D['BIC']
-    BICs-=np.max(BICs)
-    K_max=np.argmax(BICs) #replace with specific K to generate plots for other K
-    trial_max = np.argmax(BICs[Kfits==K_max,:])
+    if run:
+        BICs = np.nan*np.ones((Kfits.size,trials))
+        for Ki, K in enumerate(Kfits):
+            for trial in range(trials):
+                D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial)+'_K='+str(K)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
+                if np.any(D['bad']):
+                    print('bad',K,trial)
+                BICs[Ki,trial] = D['BIC']
+        BICs-=np.max(BICs)
+        np.savez('../summary_files/BIC_allN_share='+share,simulBICs=BICs)
+    simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
+    K_max=np.argmax(np.max(simulBICs,axis=1)) #replace with specific K to generate plots for other K
+    trial_max = np.argmax(simulBICs[Kfits==K_max,:])
     
 
     fig,ax = plt.subplots()
@@ -517,12 +522,15 @@ for share in ['W','all']:
     plt.close()
 
     #Sequential
-    BICs = np.zeros_like(Kfits)
-    for Ki, K in enumerate(Kfits):
-        fname = 'ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K)+'_sub=allN_train_reps=all'
-        D = np.load(fname+'.npz',allow_pickle=True)    
-        BICs[Ki] = D['gmm_BIC']
-    BICs-=np.max(BICs)
+    if run:
+        BICs = np.zeros_like(Kfits)
+        for Ki, K in enumerate(Kfits):
+            fname = 'ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K)+'_sub=allN_train_reps=all'
+            D = np.load(fname+'.npz',allow_pickle=True)    
+            BICs[Ki] = D['gmm_BIC']
+        BICs-=np.max(BICs)
+        np.savez('../summary_files/BIC_allN_share='+share,simulBICs=simulBICs,seqBICs=BICs)
+    seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
     VLs = np.array([[np.nanmean(m) for m in seq_mets[Ki][0]] for Ki in range(Kfits.size)])
     CVs = np.mean(VLs,axis=(1))
     sems = np.std(VLs,axis=(1))/np.sqrt(seeds*n_subsets)
@@ -621,39 +629,40 @@ for share in ['W']: #we haven't done these analyses for case B yet
     hits = np.zeros((N,len(train_reps),len(sub_levels),2))
     vn_hits = np.zeros((N,len(train_reps),len(sub_levels)-1,2))
 
-    for sli, subs in enumerate(sub_levels):
-        for tri, train_rep in enumerate(train_reps):
-            for mi, meth in enumerate(['simul','seq']):
-                for subi,sub in enumerate(subs):
-                    min_loss = np.inf
-                    D = None
-                    tr_D = None
-                    for trial in range(trials) if meth=='simul' else ['']:
-                        fname = 'ivscc_n1t2v_'+meth+'reg_share_'+share+str(trial)+'_K='+str(12)+'l2i=0'*((meth=='simul') and (sub!='allN'))+'_sub='+str(sub)+('_seed='+str(seed))*(sub!='allN')+'_train_reps='+str(train_rep)
-                        tr_D = np.load(fname+'.npz',allow_pickle = True)
-                        if meth=='seq' or tr_D['loss']<min_loss:# and (trial!=trial_max or tri!=2 or sli!=2):
-                            min_loss = tr_D['loss'] if meth=='simul' else None
-                            D = tr_D
-                    neurons = D['neuron_inds']
-                    tn_nnlls[neurons,tri,sli,mi] += np.squeeze(D['val_nnlls'][neurons] if meth=='seq' else D['val_nnlls'])
-                    tn_corrs[neurons,tri,sli,mi] += np.squeeze(D['val_corrs'][neurons] if meth=='seq' else D['val_corrs'])
-                    hits[neurons,tri,sli,mi] += 1
-                    if sub!='allN':
-                        sub = (sub,) if type(sub) is not tuple else sub
-                        val_neurons = np.squeeze(np.hstack([order[(s*N)//n_subsets:((s+1)*N)//n_subsets] for s in sub]))
-                        Q = np.zeros((N,K))
-                        Q[neurons] = D['Q']
-                        Q[val_neurons] = D['Q_val']
-                        cts[:,tri,sli,subi,mi] = np.argmax(Q,axis=1)
-                        vn_nnlls[val_neurons,tri,sli,mi] += np.squeeze(D['val_nnlls'][val_neurons] if meth=='seq' else D['val_neurons_val_nnlls'])
-                        vn_corrs[val_neurons,tri,sli,mi] += np.squeeze(D['val_corrs'][val_neurons] if meth=='seq' else D['val_neurons_val_corrs'])
-                        vn_hits[val_neurons,tri,sli,mi] += 1
-                if len(subs)>1:
-                    ARS = []
-                    for subi in range(len(subs)):
-                        for subi2 in range(subi):
-                            ARS.append(adjusted_rand_score(cts[:,tri,sli,subi,mi],cts[:,tri,sli,subi2,mi]))
-                    arss[:len(ARS),tri,sli,mi] = ARS
+    if run:
+        for sli, subs in enumerate(sub_levels):
+            for tri, train_rep in enumerate(train_reps):
+                for mi, meth in enumerate(['simul','seq']):
+                    for subi,sub in enumerate(subs):
+                        min_loss = np.inf
+                        D = None
+                        tr_D = None
+                        for trial in range(trials) if meth=='simul' else ['']:
+                            fname = 'ivscc_n1t2v_'+meth+'reg_share_'+share+str(trial)+'_K='+str(12)+'l2i=0'*((meth=='simul') and (sub!='allN'))+'_sub='+str(sub)+('_seed='+str(seed))*(sub!='allN')+'_train_reps='+str(train_rep)
+                            tr_D = np.load(fname+'.npz',allow_pickle = True)
+                            if meth=='seq' or tr_D['loss']<min_loss:# and (trial!=trial_max or tri!=2 or sli!=2):
+                                min_loss = tr_D['loss'] if meth=='simul' else None
+                                D = tr_D
+                        neurons = D['neuron_inds']
+                        tn_nnlls[neurons,tri,sli,mi] += np.squeeze(D['val_nnlls'][neurons] if meth=='seq' else D['val_nnlls'])
+                        tn_corrs[neurons,tri,sli,mi] += np.squeeze(D['val_corrs'][neurons] if meth=='seq' else D['val_corrs'])
+                        hits[neurons,tri,sli,mi] += 1
+                        if sub!='allN':
+                            sub = (sub,) if type(sub) is not tuple else sub
+                            val_neurons = np.squeeze(np.hstack([order[(s*N)//n_subsets:((s+1)*N)//n_subsets] for s in sub]))
+                            Q = np.zeros((N,K))
+                            Q[neurons] = D['Q']
+                            Q[val_neurons] = D['Q_val']
+                            cts[:,tri,sli,subi,mi] = np.argmax(Q,axis=1)
+                            vn_nnlls[val_neurons,tri,sli,mi] += np.squeeze(D['val_nnlls'][val_neurons] if meth=='seq' else D['val_neurons_val_nnlls'])
+                            vn_corrs[val_neurons,tri,sli,mi] += np.squeeze(D['val_corrs'][val_neurons] if meth=='seq' else D['val_neurons_val_corrs'])
+                            vn_hits[val_neurons,tri,sli,mi] += 1
+                    if len(subs)>1:
+                        ARS = []
+                        for subi in range(len(subs)):
+                            for subi2 in range(subi):
+                                ARS.append(adjusted_rand_score(cts[:,tri,sli,subi,mi],cts[:,tri,sli,subi2,mi]))
+                        arss[:len(ARS),tri,sli,mi] = ARS
         np.savez('summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
 
     D = np.load('summary_files/ivscc_scaling_data.npz')
@@ -674,24 +683,24 @@ for share in ['W']: #we haven't done these analyses for case B yet
         c_diffs = []
         for r in range(data.shape[1]):
             for c in range(data.shape[2]):
-               p_val = stats.wilcoxon(rel_data[np.isfinite(rel_data[:,r,c]),r,c],alternative='less' if slabels[di].endswith('ANLL') else 'greater')[1] 
-               if p_val<thresh:
-                   plt.plot([c],[r],'w*')
-               if r < data.shape[1]-1:
-                   diff = rel_data[:,r,c]-rel_data[:,r+1,c]
-                   p_val = stats.wilcoxon(diff)[1]
-                   r_diffs.append([rel_data[:,r,c],rel_data[:,r+1,c]])
-                   if p_val<thresh:
-                       plt.plot([c,c],[r+0.4,r+0.6],'w')
-               if c < data.shape[2]-1:
-                   if di==2:
-                       p_val = stats.ttest_ind(rel_data[:,r,c+1],rel_data[:,r,c],nan_policy='omit')[1]
-                   else:
-                       diff = rel_data[:,r,c+1]-rel_data[:,r,c]
-                       p_val = stats.wilcoxon(diff)[1]
-                   c_diffs.append([rel_data[:,r,c+1],rel_data[:,r,c]])
-                   if p_val<thresh:
-                       plt.plot([c+0.4,c+0.6],[r,r],'w')
+                p_val = stats.wilcoxon(rel_data[np.isfinite(rel_data[:,r,c]),r,c],alternative='less' if slabels[di].endswith('ANLL') else 'greater')[1] 
+                if p_val<thresh:
+                    plt.plot([c],[r],'w*')
+                if r < data.shape[1]-1:
+                    diff = rel_data[:,r,c]-rel_data[:,r+1,c]
+                    p_val = stats.wilcoxon(diff)[1]
+                    r_diffs.append([rel_data[:,r,c],rel_data[:,r+1,c]])
+                    if p_val<thresh:
+                        plt.plot([c,c],[r+0.4,r+0.6],'w')
+                if c < data.shape[2]-1:
+                    if di==2:
+                        p_val = stats.ttest_ind(rel_data[:,r,c+1],rel_data[:,r,c],nan_policy='omit')[1]
+                    else:
+                        diff = rel_data[:,r,c+1]-rel_data[:,r,c]
+                        p_val = stats.wilcoxon(diff)[1]
+                    c_diffs.append([rel_data[:,r,c+1],rel_data[:,r,c]])
+                    if p_val<thresh:
+                        plt.plot([c+0.4,c+0.6],[r,r],'w')
         c_diffs = np.array(c_diffs)
         r_diffs = np.array(r_diffs)
         def test(x,y,paired,**kwargs):
