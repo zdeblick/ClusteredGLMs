@@ -652,9 +652,9 @@ for share in ['W']: #we haven't done these analyses for case B yet
                         for subi2 in range(subi):
                             ARS.append(adjusted_rand_score(cts[:,tri,sli,subi,mi],cts[:,tri,sli,subi2,mi]))
                     arss[:len(ARS),tri,sli,mi] = ARS
-        np.savez('ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
+        np.savez('summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
 
-    D = np.load('ivscc_scaling_data.npz')
+    D = np.load('summary_files/ivscc_scaling_data.npz')
     tn_nnlls = D['tn_nnlls']
     tn_corrs = D['tn_corrs']
     vn_nnlls = D['vn_nnlls']
