@@ -1,5 +1,8 @@
 .DS_Store
 ivscc_data_n12.npz
+n12_cells.csv
+anaconda3
 cell_types/
+.ipynb_checkpoints
 *.out
 *.pyc
