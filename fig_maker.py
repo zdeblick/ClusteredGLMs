@@ -24,8 +24,9 @@ print(os.getcwd())
 savepath = '../figs/'
 
 
-methods = ['Simultaneous','Sequential']
-nmeth = len(methods)
+
+methnames = {'seq':'Sequential','simul':'Simultaneous'}
+nmeth = len(methnames)
 dt=2 #ms
 downsample = 5
 alg = 'trust-ncg'
@@ -468,7 +469,6 @@ for share in ['W','all']:
     plt.close()
 
 
-    methnames = {'seq':'Sequential','simul':'Simultaneous'}
 
     for meth in methnames.keys():
         fig,ax=plt.subplots()
@@ -507,27 +507,14 @@ for share in ['W','all']:
     simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
     K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))] #replace with specific K to generate plots for other K
     trial_max = np.argmax(simulBICs[Kfits==K_max,:])
-    
-
-    fig,ax = plt.subplots()
-    ax.plot(Kfits,simulBICs,'o',c=colors[0])
-    ax.plot(Kfits,np.max(simulBICs,axis=1),c=colors[0])
-    ax.set_ylim([-1600,100])
-    ax.set_xticks(Kfits)
-    ax.set_xlabel('K',fontsize=14)
-    ax.set_ylabel('BIC',fontsize=14,c=colors[0])
-    plt.title('Simultaneous Method',fontsize=14)
-    plt.tight_layout()
-    plt.savefig(savepath+'ivscc_simul_BIC_all_share='+share)
-    plt.close()
 
     #Sequential
     if run:
-        BICs = np.zeros_like(Kfits)
+        BICs = np.zeros((Kfits.size,trials))
         for Ki, K in enumerate(Kfits):
             fname = 'ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K)+'_sub=allN_train_reps=all'
             D = np.load(fname+'.npz',allow_pickle=True)    
-            BICs[Ki] = D['gmm_BIC']
+            BICs[Ki,:] = D['gmm_BIC']
         BICs-=np.max(BICs)
         np.savez('../summary_files/BIC_allN_share='+share,simulBICs=simulBICs,seqBICs=BICs)
     seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
@@ -535,16 +522,19 @@ for share in ['W','all']:
     CVs = np.mean(VLs,axis=(1))
     sems = np.std(VLs,axis=(1))/np.sqrt(seeds*n_subsets)
 
-
-    fig,ax = plt.subplots()
-    ax.plot(Kfits,seqBICs,c=colors[0])
-    ax.set_xticks(Kfits)
-    plt.xlabel('$K$',fontsize=14)
-    ax.set_ylabel('BIC on train neurons',fontsize=14,c=colors[0])
-    plt.title('Sequential Method',fontsize=14)
-    plt.tight_layout()
-    plt.savefig(savepath+'ivscc_seq_BIC_all_share'+share+'.png',bbox_inches='tight')
-    plt.close()
+    bothBICs = {'simul':simulBICs, 'seq':seqBICs}
+    for m,meth in methnames.items():
+        fig,ax = plt.subplots()
+        ax.plot(Kfits,bothBICs[m],'o',c=colors[0])
+        ax.plot(Kfits,np.max(bothBICs[m],axis=1),c=colors[0])
+        ax.set_ylim([-1600,100])
+        ax.set_xticks(Kfits)
+        ax.set_xlabel('K',fontsize=14)
+        ax.set_ylabel('BIC',fontsize=14)
+        plt.title(meth+' Method',fontsize=14)
+        plt.tight_layout()
+        plt.savefig(savepath+'ivscc_'+m+'_BIC_all_share='+share)
+        plt.close()
 
 
     ###Metadata figures
