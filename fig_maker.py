@@ -1,3 +1,6 @@
+#TODO: go back on cluster and fix xaxis label in example_beta figs
+
+
 import numpy as np
 from scipy import stats
 import pandas as pd
@@ -17,12 +20,16 @@ import colorcet as cc
 cmap = cc.cm.rainbow
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
+import matplotlib as mpl 
+mpl.rcParams['xtick.labelsize'] = 14
+mpl.rcParams['ytick.labelsize'] = 14
+mpl.rcParams['axes.labelsize'] = 14
+tfs = 12
 
 print(os.getcwd())
 os.chdir('files')
 print(os.getcwd())
 savepath = '../figs/'
-
 
 
 methnames = {'seq':'Sequential','simul':'Simultaneous'}
@@ -112,7 +119,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                     MAD_Ws[si,ki,:,wi] = [rmst(true_Ws,D['Ws']),rmst(true_Ws,D_ind['Ws'])]
                     MAD_Fs[si,ki,:,wi] = [rmst(true_Fs,np.squeeze(D['Fs'])),rmst(true_Fs,np.squeeze(D_ind['Fs']))]
 
-                    #example sim
+### Figures 2 A,B and S1 A,B
                     if (K==5) and (seed==10) and (wi==0):
                         simul_sds = np.array([np.sqrt(np.diag(D['C_k'][k]))[W_from_muk_inds] for k in range(K)])
                         fig,ax = plt.subplots()
@@ -126,7 +133,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             h = plt.plot(np.arange(d[1]+1)*dt,means.T,color+'-')
                             hs.append(h[0])
                             labels.append(label)
-                        plt.xlabel('Time (s)',fontsize=14)
+                        plt.xlabel('Time (ms)',fontsize=14)
                         plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
                         ax.set_ylim([-4,2])
                         plt.legend(hs,labels,fontsize=14)
@@ -137,7 +144,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             fig,ax = plt.subplots()
                             plt.plot(np.arange(d[0])*downsample*dt,D['true_betas'][0,:d[0]],'k')
                             plt.ylabel('$\\beta^\\mathrm{stim}_i$',fontsize=14)
-                            plt.xlabel('Time (s)',fontsize=14)
+                            plt.xlabel('Time (ms)',fontsize=14)
                             plt.savefig(savepath+'example_beta_stim.png',bbox_inches='tight')
                             plt.close()
                         else:
@@ -154,7 +161,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                                 h = plt.plot(np.arange(d[0])*downsample*dt,means.T,color+'-')
                                 hs.append(h[0])
                                 labels.append(label)
-                            plt.xlabel('Time (s)',fontsize=14)
+                            plt.xlabel('Time (ms)',fontsize=14)
                             plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
                             ax.set_ylim([-4,2])
                             plt.legend(hs,labels,fontsize=14)
@@ -173,7 +180,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
     fmts = [['-r', '-c'], ['--r', '--c'], [':r', ':c']]
     lss = ['-','--',':']
 
-    ### Figure!!!
+### Figure 2 C-F and S1 C-F
     for (name, ylabel, data) in plots:
         fig,ax = plt.subplots()
         plt_data = np.nanmean(data,axis=0)
@@ -188,36 +195,38 @@ for share, Wtypes in [('W',True), ('all',False)]:
                 diff = np.diff(data,axis=2)[:,ki,0,wi]
                 p_val = stats.wilcoxon(diff[np.isfinite(diff)],alternative='less' if name=='ARS' else 'greater')[1]
                 #p_val *= len(Ks)*len(Wstds) #panel-wise bonferroni correction
-                plt.text(Wstd,max_d,np.format_float_scientific(p_val,precision=0),fontsize=10)
-            plt.text(Wstds[0]/2,max_d,'K='+str(Ks[ki]))
+            #     plt.text(Wstd,max_d,np.format_float_scientific(p_val,precision=0),fontsize=10)
+            # plt.text(Wstds[0]/2,max_d,'K='+str(Ks[ki]))
         ax.set_xscale('log')
 
         plt.xlabel('$\\sigma$',fontsize=14)
         plt.ylabel(ylabel,fontsize=14)
         if name=='ARS':
-             plt.legend(['Simultaneous','Sequential']+['']*2*(len(Ks)-1),ncol=len(Ks),markerfirst=False,title=' '*24+(' '*9).join(['K='+str(K) for K in Ks]), loc = 'upper right')
+             plt.legend(['Simultaneous','Sequential']+['']*2*(len(Ks)-1),ncol=len(Ks),markerfirst=False,title=' '*24+(' '*9).join(['K='+str(K) for K in Ks]), loc = 'lower left')
         if name== 'Wstd_est':
             plt.plot(Wstds,Wstds,'k')
             ax.set_yscale('log')
         plt.savefig(savepath+name+'_vs_Wstd_reg_share_'+share+'.png',bbox_inches='tight')
         plt.close()
 
-    ### Figures!!!
+### Figures 3, S2, S6
     for (name, ylabel, data) in ms_plots:
         is_bic = name.startswith('BIC')
         fig,ax = plt.subplots()
 
         K_means = np.zeros((len(Ks),2))
         K_sems = np.zeros((len(Ks),2))
-        plt_sem = np.nanstd(data,axis=0)/np.sqrt(np.sum(np.isfinite(data),axis=0))
+        print(name,data.shape)
+
+        plt_sem = np.nanstd(data-data[:,:,:,:1],axis=0)/np.sqrt(np.sum(np.isfinite(data),axis=0))
         for ki,K in enumerate(Ks):
             for meth in range(nmeth):
                 if is_bic:
                     K_sel = Kfits[np.nanargmax(data[:,ki,meth,:],axis=-1)]
                 else:
                     N = 40*K
-                    se = 1.0*np.stack([plt_sem[ki,meth,:]]*seeds,axis=0)*np.sqrt(50)
-                    K_sel = np.min(Kfits+1e300*(data[:,ki,meth,:]>np.min(data[:,ki,meth,:],axis=-1,keepdims=True)+se[np.argmin(data[:,ki,meth,:],axis=-1)]),axis=-1)
+                    se = plt_sem[ki,meth,:]
+                    K_sel = np.min(Kfits+1e300*(data[:,ki,meth,:]>np.expand_dims(np.min(data[:,ki,meth,:],axis=-1)+se[np.argmin(data[:,ki,meth,:],axis=-1)],axis=-1)),axis=-1)
                 a,_ = np.histogram(K_sel,bins=np.arange(Kfits[-1]+1)+0.5,density=True)
                 width = 0.8/(2*len(Ks))
                 xp = Kfits-0.4+width/2+(2*ki+meth)*width
@@ -225,7 +234,8 @@ for share, Wtypes in [('W',True), ('all',False)]:
                 K_means[ki,meth] = np.mean(K_sel)
                 K_sems[ki,meth] = np.std(K_sel)/np.sqrt(K_sel.size)
             plt.bar(K,1,width=0.9,color=(0,0,0,0),edgecolor='k',ls=lss[ki])
-            plt.text(0,1.1+0.05*ki,'True K='+str(K)+', Simultaneous='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', Sequential='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)))
+            # print(share, name,'True K='+str(K)+', Simultaneous='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', Sequential='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)))
+            plt.text(-0.6,-0.3+0.08*ki,'True K='+str(K)+', Simul-selected='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', Seq-selected='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)),fontsize=12)
         plt.legend(['Simultaneous','Sequential','True']+['']*3*(len(Ks)-1),ncol=len(Ks),markerfirst=False,title=' '*24+(' '*9).join(['K='+str(K) for K in Ks]), loc = 'upper right')
 
             
@@ -234,7 +244,6 @@ for share, Wtypes in [('W',True), ('all',False)]:
 
         plt.savefig(savepath+name+'_sel_hist_reg_share_'+share+'.png',bbox_inches='tight')
         plt.close()         
-
 
 
 
@@ -264,7 +273,6 @@ run = False
 for share in ['W','all']:
     W_from_muk_inds = np.arange(d[1]) if share=='W' else np.arange(d[0],d[0]+d[1])
 
-    ### Figures!!!
     for subsub in [True,False] if run else []:
         if share=='all' and subsub:
             continue
@@ -379,6 +387,7 @@ for share in ['W','all']:
     simul_mets_alltr = D['alltr_mets'][()]['simul']
     l2s = D['l2s']
 
+### Figure S9
     for i in range(len(names)):
         fig,ax = plt.subplots()
 
@@ -399,7 +408,7 @@ for share in ['W','all']:
 
     D = dict(np.load('../ivscc_data_n12.npz',allow_pickle=True))
 
-    ### Color for neurons in generalization plots
+### Figures 5 A,C,E and S4
     c = np.log10(D['test_spk_counts']) #order*n_subsets//N
 
     i = 1
@@ -412,8 +421,8 @@ for share in ['W','all']:
     plt.axis('square')
     plt.xlim(lims)
     plt.ylim(lims)
-    plt.text(lims[1]*3.5/5,lims[1]*0.5/5,'Simultaneous \n is better')
-    plt.text(lims[1]/5*0.5,lims[1]/5*4,'Sequential \n is better')
+    plt.text(lims[1]*3.5/5,lims[1]*0.5/5,'Simultaneous \n is better',fontsize=tfs)
+    plt.text(lims[1]/5*0.5,lims[1]/5*4,'Sequential \n is better',fontsize=tfs)
     plt.xlabel('Independent GLM\'s test ANLL',fontsize=14)
     plt.ylabel('Simul GLM\'s test ANLL',fontsize=14)
     plt.tight_layout()
@@ -429,8 +438,8 @@ for share in ['W','all']:
     plt.axis('square')
     plt.xlim(lims)
     plt.ylim(lims)
-    plt.text(lims[1]*3.5/5,lims[1]*0.5/5,'Sequential \n is better')
-    plt.text(lims[1]/5*0.5,lims[1]/5*4,'Simultaneous \n is better')
+    plt.text(lims[1]*3.5/5,lims[1]*0.5/5,'Sequential \n is better',fontsize=tfs)
+    plt.text(lims[1]/5*0.5,lims[1]/5*4,'Simultaneous \n is better',fontsize=tfs)
     plt.xlabel('Independent GLM\'s test $EV_{ratio}$',fontsize=14)
     plt.ylabel('Simul GLM\'s test $EV_{ratio}$',fontsize=14)
     plt.tight_layout()
@@ -457,10 +466,10 @@ for share in ['W','all']:
     plt.ylim(lims)
     plt.axvline(0,c='k')
     plt.axhline(0,c='k')
-    plt.text(lims[0]-ld/5,lims[0],'Sequential \n is better',rotation=90)
-    plt.text(lims[0]-ld/5,lims[0]+ld*3.5/5,'Simultaneous \n is better',rotation=90)
-    plt.text(lims[0]+ld*3.5/5,lims[0]-ld/5,'Sequential \n is better')
-    plt.text(lims[0],lims[0]-ld/5,'Simultaneous \n is better')
+    plt.text(lims[0]-1.2*ld/5,lims[0],'Sequential \n is better',rotation=90,fontsize=tfs)
+    plt.text(lims[0]-1.2*ld/5,lims[0]+ld*3.5/5,'Simultaneous \n is better',rotation=90,fontsize=tfs)
+    plt.text(lims[0]+ld*3.5/5,lims[0]-ld/5,'Sequential \n is better',fontsize=tfs)
+    plt.text(lims[0],lims[0]-ld/5,'Simultaneous \n is better',fontsize=tfs)
     plt.title('Relative difference between \n Simultaneous and Sequential methods',fontsize=14)
     plt.xlabel('GLM\'s test \n ANLL',fontsize=14)
     plt.ylabel('GLM\'s test \n $EV_{ratio}$',fontsize=14)
@@ -469,7 +478,7 @@ for share in ['W','all']:
     plt.close()
 
 
-
+### Figure S7, S8
     for meth in methnames.keys():
         fig,ax=plt.subplots()
         if meth=='simul':
@@ -483,7 +492,7 @@ for share in ['W','all']:
         Ksel = Kfits[np.argmin(Kfits-1000 * ( CV>np.max(CV)-np.std(y2,axis=1)/np.sqrt(y2.shape[1]) ) )]
         h2 = ax.plot(Ksel,np.max(CV),'r*',markersize=10)[0]
         ax.set_ylabel('Loglikelihood on held out neurons',fontsize=14)
-        ax.set_xticks(Kfits)
+        ax.set_xticks(Kfits[::2])
         ax.set_xlabel('K',fontsize=14)
         plt.title(methnames[meth]+' Method',fontsize=14)
         plt.legend([h1,h2],['LL of each fold', 'K selected by 1SE rule'],loc='lower right')
@@ -491,8 +500,9 @@ for share in ['W','all']:
         plt.savefig(savepath+'ivscc_'+meth+'_VLs_share='+share)
         plt.close()
 
+    
+### Figures 4 A,C and S3 A,C
 
-    ### Figures !!!
     #Simultaneous
     if run:
         BICs = np.nan*np.ones((Kfits.size,trials))
@@ -528,7 +538,7 @@ for share in ['W','all']:
         ax.plot(Kfits,bothBICs[m],'o',c=colors[0])
         ax.plot(Kfits,np.max(bothBICs[m],axis=1),c=colors[0])
         ax.set_ylim([-1600,100])
-        ax.set_xticks(Kfits)
+        ax.set_xticks(Kfits[::2])
         ax.set_xlabel('K',fontsize=14)
         ax.set_ylabel('BIC',fontsize=14)
         plt.title(meth+' Method',fontsize=14)
@@ -537,12 +547,11 @@ for share in ['W','all']:
         plt.close()
 
 
-    ###Metadata figures
     pixel_size_in = 0.35
     cat_cols = ['dendrite_type','structure_hemisphere','structure_layer_name','transgenic_line']
     used_cells = pd.read_csv('../n12_cells.csv')
     which = np.arange(N)
-    for meth in ['simul','seq']:
+    for meth in methnames.keys():
         if meth=='simul':
             D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
         else:
@@ -551,6 +560,8 @@ for share in ['W','all']:
         P = np.flip(np.argsort(np.sum(D['mu_k'][:,W_from_muk_inds],axis=1))) #ordering permutations
         min_N = 20-0.1 #only clusters with pi_k*N > min_N are shown
 
+
+### Figures 4 B,D and S3 B,D
         hs = []
         labels = []
         used_ks = []
@@ -566,15 +577,17 @@ for share in ['W','all']:
         plt.ylabel('Self-interaction filters',fontsize=14)
         ax.set_ylim([-4,2])
         leg = plt.legend(hs,labels,loc=(1,0))
-        leg.set_title('Cluster IDs and size')
-        plt.title('Simultaneous Method',fontsize=14)
+        leg.set_title('Cluster IDs \n and size ($\hat{\pi}_k$)')
+        plt.title(methnames[meth]+' Method',fontsize=14)
         plt.tight_layout()
         plt.savefig(savepath+'IVSCC_Ws_'+meth+'reg_share'+share+'_K='+str(K_max)+'.png',bbox_inches='tight')
         plt.close()
 
+
+### Figures 6 and S5
         c_types=np.argmax(D['Q'],axis=1) #memberships
 
-        plt.set_cmap('PiYG')
+        plt.set_cmap(cc.cm.coolwarm)
         for i,cat in enumerate(cat_cols):
             fig,ax = plt.subplots()
             opts = np.unique(used_cells[cat].values)
@@ -602,14 +615,14 @@ for share in ['W','all']:
             plt.savefig(savepath+title+meth+'_share'+share+'_K='+str(K_max)+'.png',bbox_inches='tight')
             plt.close()            
 
+
 for share in ['W']: #we haven't done these analyses for case B yet
-    ### Figures !!!
     K = 12
     l2_i = 0
     seed = 0
     train_reps = [1, 2, 3] #, 'all']
     sub_levels = [list(combinations(np.flip(np.arange(n_subsets)),3)), list(combinations(np.flip(np.arange(n_subsets)),2)), list(range(n_subsets)), ['allN']]
-    sl_names = ['$\\frac{1}{4}$', '$\\frac{1}{2}$', '$\\frac{3}{4}$', 'all']
+    sl_names = ['$\\dfrac{1}{4}$', '$\\dfrac{1}{2}$', '$\\dfrac{3}{4}$', 'all']
     tn_nnlls = np.zeros((N,len(train_reps),len(sub_levels),2))
     tn_corrs = np.zeros((N,len(train_reps),len(sub_levels),2))
     vn_nnlls = np.zeros((N,len(train_reps),len(sub_levels)-1,2))
@@ -655,6 +668,7 @@ for share in ['W']: #we haven't done these analyses for case B yet
                         arss[:len(ARS),tri,sli,mi] = ARS
         np.savez('../summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
 
+### Figure 5 B,D,F
     D = np.load('../summary_files/ivscc_scaling_data.npz')
     tn_nnlls = D['tn_nnlls']
     tn_corrs = D['tn_corrs']
@@ -675,13 +689,13 @@ for share in ['W']: #we haven't done these analyses for case B yet
             for c in range(data.shape[2]):
                 p_val = stats.wilcoxon(rel_data[np.isfinite(rel_data[:,r,c]),r,c],alternative='less' if slabels[di].endswith('ANLL') else 'greater')[1] 
                 if p_val<thresh:
-                    plt.plot([c],[r],'w*')
+                    plt.plot([c],[r],'w*',markersize=30)
                 if r < data.shape[1]-1:
                     diff = rel_data[:,r,c]-rel_data[:,r+1,c]
                     p_val = stats.wilcoxon(diff)[1]
                     r_diffs.append([rel_data[:,r,c],rel_data[:,r+1,c]])
                     if p_val<thresh:
-                        plt.plot([c,c],[r+0.4,r+0.6],'w')
+                        plt.plot([c,c],[r+0.4,r+0.6],'w',linewidth=8)
                 if c < data.shape[2]-1:
                     if di==2:
                         p_val = stats.ttest_ind(rel_data[:,r,c+1],rel_data[:,r,c],nan_policy='omit')[1]
@@ -690,7 +704,7 @@ for share in ['W']: #we haven't done these analyses for case B yet
                         p_val = stats.wilcoxon(diff)[1]
                     c_diffs.append([rel_data[:,r,c+1],rel_data[:,r,c]])
                     if p_val<thresh:
-                        plt.plot([c+0.4,c+0.6],[r,r],'w')
+                        plt.plot([c+0.4,c+0.6],[r,r],'w',linewidth=8)
         c_diffs = np.array(c_diffs)
         r_diffs = np.array(r_diffs)
         def test(x,y,paired,**kwargs):
