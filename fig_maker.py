@@ -24,6 +24,7 @@ import matplotlib as mpl
 mpl.rcParams['xtick.labelsize'] = 14
 mpl.rcParams['ytick.labelsize'] = 14
 mpl.rcParams['axes.labelsize'] = 14
+mpl.rcParams['figure.max_open_warning'] = 100
 tfs = 12
 
 print(os.getcwd())
@@ -130,7 +131,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
                             ('Simultaneous', D['mu_k'][:,W_from_muk_inds], simul_sds, 'r'), 
                             ('Sequential', gmm.means_[:,W_from_muk_inds], np.sqrt(gmm.covariances_)[:,W_from_muk_inds],'c')]
                         for label, means, sds, color in plot_data:
-                            h = plt.plot(np.arange(d[1]+1)*dt,means.T,color+'-')
+                            h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
                             hs.append(h[0])
                             labels.append(label)
                         plt.xlabel('Time (ms)',fontsize=14)
@@ -219,6 +220,7 @@ for share, Wtypes in [('W',True), ('all',False)]:
         print(name,data.shape)
 
         plt_sem = np.nanstd(data-data[:,:,:,:1],axis=0)/np.sqrt(np.sum(np.isfinite(data),axis=0))
+        Kest_str = ''
         for ki,K in enumerate(Ks):
             for meth in range(nmeth):
                 if is_bic:
@@ -234,12 +236,13 @@ for share, Wtypes in [('W',True), ('all',False)]:
                 K_means[ki,meth] = np.mean(K_sel)
                 K_sems[ki,meth] = np.std(K_sel)/np.sqrt(K_sel.size)
             plt.bar(K,1,width=0.9,color=(0,0,0,0),edgecolor='k',ls=lss[ki])
+            Kest_str+='\n True K='+str(K)+': $\hat{K}_{simul}$='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', $\hat{K}_{seq}$='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2))
             # print(share, name,'True K='+str(K)+', Simultaneous='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', Sequential='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)))
-            plt.text(-0.6,-0.3+0.08*ki,'True K='+str(K)+', Simul-selected='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', Seq-selected='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)),fontsize=12)
+            # plt.text(-0.6,-0.3+0.08*ki,'True K='+str(K)+', $\hat{K}_{simul}$='+str(np.round(K_means[ki,0],2))+'$\\pm$'+str(np.round(K_sems[ki,0],2))+', $\hat{K}_{seq}$='+str(np.round(K_means[ki,1],2))+'$\\pm$'+str(np.round(K_sems[ki,1],2)),fontsize=12)
         plt.legend(['Simultaneous','Sequential','True']+['']*3*(len(Ks)-1),ncol=len(Ks),markerfirst=False,title=' '*24+(' '*9).join(['K='+str(K) for K in Ks]), loc = 'upper right')
 
             
-        plt.xlabel(ylabel+'-Selected $K$',fontsize=14)
+        plt.xlabel(ylabel+'-Selected $\hat{K}$'+ Kest_str,fontsize=14)
         plt.ylabel('Frequency',fontsize=14)
 
         plt.savefig(savepath+name+'_sel_hist_reg_share_'+share+'.png',bbox_inches='tight')
@@ -388,22 +391,25 @@ for share in ['W','all']:
     l2s = D['l2s']
 
 ### Figure S9
-    for i in range(len(names)):
-        fig,ax = plt.subplots()
+    for shift in [True,False]:
+        for i in range(len(names)):
+            fig,ax = plt.subplots()
 
-        if not names[i].startswith('GLM_'):
-            continue
-        simul_data = np.stack([np.array(simul_mets[Ki][i])-np.array(simul_mets[0][i]) for Ki in range(Kfits.size)],axis=0)
-        print(names[i],simul_data.shape)
-        for f in range(simul_data.shape[-1]):
-            h1 = plt.errorbar(Kfits-0.15+0.1*f,np.nanmean(simul_data,axis=(1,2))[:,f],yerr=np.nanstd(simul_data,axis=(1,2))[:,f]/np.sqrt(np.sum(np.isfinite(simul_data[:,:,:,f]),axis=(1,2))))
+            if not names[i].startswith('GLM_'):
+                continue
+            simul_data = np.stack([np.array(simul_mets[Ki][i]) for Ki in range(Kfits.size)],axis=0)
+            if shift:
+                simul_data-=simul_data[:1,:,:,:]
+            print(names[i],simul_data.shape)
+            for f in range(simul_data.shape[-1]):
+                h1 = plt.errorbar(Kfits-0.15+0.1*f,np.nanmean(simul_data,axis=(1,2))[:,f],yerr=np.nanstd(simul_data,axis=(1,2))[:,f]/np.sqrt(np.sum(np.isfinite(simul_data[:,:,:,f]),axis=(1,2))))
 
-        ax.set_xticks(Kfits)
-        ax.set_xlabel('K',fontsize=14)
-        ax.set_ylabel(labels[i],fontsize=14)
-        fig.tight_layout()
-        plt.savefig(savepath+'IVSCC_interp_'+names[i]+'_share'+share)
-        plt.close()
+            ax.set_xticks(Kfits[::2])
+            ax.set_xlabel('K',fontsize=14)
+            ax.set_ylabel(labels[i],fontsize=14)
+            fig.tight_layout()
+            plt.savefig(savepath+'IVSCC_interp_'+names[i]+'_share'+share+'_shift'*shift)
+            plt.close()
 
 
     D = dict(np.load('../ivscc_data_n12.npz',allow_pickle=True))
