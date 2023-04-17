@@ -1,8 +1,5 @@
 #!/home/daniel.zdeblick/anaconda3/bin/python3 #used if this script is run by bash command
 
-array_id_str = 'SLURM_ARRAY_TASK_ID' #slurm
-#array_id_str = 'PBS_ARRAYID' #pbs/moab/torque
-
 
 import numpy as np
 import pandas as pd
@@ -16,11 +13,13 @@ import os
 import cProfile  
 from helpers import *
 from models import *
+
     
-os.chdir('files')
-    
-def main_data():
+def main_data(seq_method=False,val_bins=False,all_n=True,subsub=False,share='W'):
     D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
+
+    os.chdir('files')
+
     stim = D['binned_stim']
     binned_spikes = D['binned_spikes']
     test_stim = D['test_binned_stim']
@@ -33,29 +32,23 @@ def main_data():
     seeds = 1
 
     n_subsets = 4
-    seq_method = False
-    all_n = True
-    val_bins = False
-    subsub = False
-    n_tsubs = 2
-    train_reps = 'all'
-    share='all'
-
-
     shared_stim = False
     downsample = 5
-#    which_l2s = np.arange(19)
-#    which_l2s = np.arange(-4,11)
-    which_l2s = np.arange(0,1)
+    
     train_nm1 = True
     trials = 20
     Ks = np.arange(1,21)
     simul_tfolds = 4
 
+    train_repss = [1, 2, 3]
+    subsets = np.hstack([list(combinations(np.flip(np.arange(n_subsets)),3)), list(combinations(np.flip(np.arange(n_subsets)),2)), list(range(n_subsets))])
+    train_reps = 'all'      
+
     if seq_method:
         ###All Neurons
         l2s_self = np.logspace(-7,-1,19)
         l2s_stim = np.logspace(-7,-1,19)
+        which_l2s = np.arange(0,19)
         if all_n and val_bins:
             (l2_stim_i,l2_self_i) = np.unravel_index(id,(which_l2s.size,which_l2s.size))
             l2_stim_i = which_l2s[l2_stim_i]
@@ -70,10 +63,10 @@ def main_data():
         ###Subset
         else:
             if subsub:
-                subsets = list(combinations(np.flip(np.arange(n_subsets)),n_tsubs))
-                (subset,seed,Ki) = np.unravel_index(id,(len(subsets),seeds,Ks.size))
+                (subset,repi,seed) = np.unravel_index(id,(len(subsets),len(train_repss),seeds))
+                Ki = 11 if share=='W' else 0
                 subset = subsets[subset]
-#                subset = [(s1,s2) for s1 in range(n_subsets) for s2 in range(s1)][subset]
+                train_reps = train_repss[repi]
             else:
                 (subset,seed,Ki) = np.unravel_index(id,(n_subsets,seeds,Ks.size))
             np.random.seed(seed)
@@ -86,7 +79,7 @@ def main_data():
             (trial,Ki) = np.unravel_index(id,(200,Ks.size))
             K = Ks[Ki]
             min_val_nnll = np.inf
-            l2_i = 0#best_l2i #1e-7
+            l2_i = 0 #We pre-selected this for case A based on the results of model selection with subsets of neurons from step 5a
             l2 = l2s[l2_i]
             subset = np.inf
             fname = 'ivscc_n1t2v_simulreg_share_'+share+str(trial)+'_K='+str(K)+'_sub=allN_train_reps='+str(train_reps)
@@ -94,13 +87,15 @@ def main_data():
         ###Subset of neurons
         else:
             if subsub:
-                subsets = list(combinations(np.flip(np.arange(n_subsets)),n_tsubs))
-                (trial,subset,seed,Ki,l2_i) = np.unravel_index(id,(200,len(subsets),seeds,Ks.size,which_l2s.size))
+                which_l2s = np.arange(0,1) #We pre-selected this for case A based on the results of model selection with subsets of neurons from step 5a
+                (trial,subset,repi,seed,l2_i) = np.unravel_index(id,(200,len(subsets),len(train_repss),seeds,which_l2s.size))
+                Ki = 11 if share=='W' else 0
                 subset = subsets[subset]
-#                subset = [(s1,s2) for s1 in range(n_subsets) for s2 in range(s1)][subset]
+                train_reps = train_repss[repi]
             else:
+                which_l2s = np.arange(0,1) if share=='all' else np.arange(-3,3)
                 (trial,subset,seed,Ki,l2_i) = np.unravel_index(id,(200,n_subsets,seeds,Ks.size,which_l2s.size))
-            l2_i =which_l2s[l2_i]
+            l2_i = 0 if subsub else which_l2s[l2_i]
             l2 = l2s[l2_i]
             K = Ks[Ki]
             np.random.seed(seed)
@@ -128,7 +123,7 @@ def main_data():
         tr_trials = [np.arange(len(s)) for s in stim]
     else:
         if val_bins:
-            stop # if you ever want to do this, make sure that no trial is both val and train
+            raise(NotImplementedError) # if you ever want to do this, make sure that no trial is both val and train
         tr_trials = [np.random.permutation(len(s))[:train_reps] for s in stim]
 
     TL = None
@@ -226,35 +221,98 @@ def main_data():
         ctm.fit(train_stim,train_spks,max_it=200,n_init=1,val_stim=val_stim,val_spks=val_spks)
         if not val_bins and val_neurons.size>0:
             ctm.val_neurons([stim[n] for n in val_neurons],[binned_spikes[n] for n in val_neurons],val_stim=[test_stim[n] for n in val_neurons],val_spks=[test_spikes[n] for n in val_neurons])
-
             print('Done; ', fname)
     return True
 
 
-
-def main_sim():
+def main_sim_from_ivscc(seq_method = False, share='W'):
+    os.chdir('files')
     id = os.getenv(array_id_str)
     id = 0 if id is None else int(id)
+    downsample = 5
+    trials = 20
+
+    if True: #simul betas
+        simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
+        K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
+        trial_max = np.argmax(simulBICs[Kfits==K_max,:])
+        D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
+    else: #seq betas
+        simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
+        K_max=Kfits[np.argmax(simulBICs)]
+        D = np.load('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all'+'.npz',allow_pickle=True)
+
+    l2s_stim = np.logspace(-7,-1,13)
+    l2s_self = np.logspace(-7,-1,13)
+    Kfits = np.arange(1,21)
+    if seq_method:
+        (l2_stim_i,l2_self_i) = np.unravel_index(id,(l2s_stim.size,l2s_self.size))
+        fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
+    else:
+        l2s = [0.0] if share=='all' else l2s_stim
+        (trial,Ki,l2_i) = np.unravel_index(id,(500,Kfits.size,l2s.size))
+        fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
+
+    seed=0
+    np.random.seed(seed)
+    sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
+
+    if seq_method:
+        Ws = []
+        Fs = []
+        bs = []
+        train_nnlls = []
+        for n in range(N):
+            to_guess = np.hstack((np.squeeze(D['Fs'][n]),D['Ws'][n],np.expand_dims(D['bs'][n],0))) if guess else None
+            F, W, b, train_nnll, _ = fit_GLM(sim_stim[n],sim_spikes[n],d,dsns=False,l2_stim=l2s_stim[l2_stim_i],l2_self=l2s_self[l2_self_i],guess=to_guess,downsample=downsample)
+            train_nnlls.append(train_nnll)
+            Fs.append(F)
+            Ws.append(W)
+            bs.append(b)
+        D = {}
+        D['train_nnlls']=train_nnlls
+        D['Fs']=Fs
+        D['Ws']=Ws
+        D['bs']=bs
+        D['true_betas'] = true_betas
+        D['true_mus'] = true_mus
+        D['true_ks'] = true_ks
+        np.savez(fname,**D)
+        print('Done!', fname)
+    else:
+        ctm = CellTypesModel(d,Kfit,fname=fname,share=share,l2=l2s[l2_i],downsample=downsample)
+        D = ctm.fit(sim_stim,sim_spikes,max_it=200,n_init=1,tol=1e-6)
+        D['ars'] = adjusted_rand_score(np.argmax(D['Q'],axis=1),true_ks)
+        D['true_mus'] = true_mus
+        D['true_betas'] = true_betas
+        np.savez(fname,**D)
+        print('Done!', fname)
+
+
+
+
+def main_sim(seq_method = False,oracle = False,val_neurons = False,mod_select = False,share = 'W'):
+    os.chdir('files')
+
+    id = os.getenv(array_id_str)
+    id = 0 if id is None else int(id)
+    downsample = 5
+    trials = 20
+
+
     l2s = np.logspace(-5,-2,10)
     l2s_stim = np.logspace(-5,-2,10)
     l2s_self = np.logspace(-6.5,-3.5,10)[:-2]
     Ks = [3,5]
     deltas = [0.5]
     #deltas = list(np.linspace(0.1,1,10))
-    trials = 20
+    
     oracle_seeds = 10
-
-    share = 'W'
     Wtypes=(share=='W')
     seed_offset = 0
-    seq_method = False
-    oracle = False
-    mod_select = True
-    val_neurons = True
-    downsample = 5
+    
     NpK = 10 if val_neurons else 40
 
-    
     if mod_select:
         Wstds = list(np.logspace(-2,-0.5,10)[np.array([0,7])])
     else:
@@ -267,9 +325,6 @@ def main_sim():
             seed+=oracle_seeds+seed_offset
     else:
         l2s = np.array([0.0]) if share=='all' else l2s
-        #Kfits = np.arange(1,9)
-        #(seed,trial,K,Wstd,delta,Kfit,l2_i) = np.unravel_index(id,(500,5,len(Ks),len(Wstds),len(deltas),Kfits.size,l2s.size)) #many runs with different Omega_K
-        #Kfit=Kfits[Kfit]
         if not oracle and not mod_select:
             (seed,trial,K,Wstd,delta) = np.unravel_index(id,(500,trials,len(Ks),len(Wstds),len(deltas))) #many runs with different Omega_K
             seed += oracle_seeds+seed_offset
@@ -281,7 +336,7 @@ def main_sim():
             (seed,trial,K,Kfit,Wstd,delta) = np.unravel_index(id,(500,trials,len(Ks),nKfits,len(Wstds),len(deltas)))
             seed += oracle_seeds+seed_offset
             if val_neurons:
-                Kfit = Ks[K] #Kfits[Kfit]
+                Kfit = Kfits[Kfit]
             else:
                 Kfit = Kfits[Kfits!=Ks[K]][Kfit]
         else:
@@ -292,7 +347,11 @@ def main_sim():
     K = Ks[K]
     delta = deltas[delta]
     np.random.seed(seed+1000*val_neurons)
-    N=K*NpK
+
+    sim_stim, sim_spikes, true_betas, true_mus = sim_GMMGLM(K, Wstd, drange=20000, delta=delta, d=d, Wtypes=Wtypes, NpK=NpK, downsample=downsample)
+
+
+    N = sim_spikes.shape[0]
     d = [10,20]
     alg = 'trust-ncg'
 
@@ -346,8 +405,7 @@ def main_sim():
         elif share=='all':
             l2_i=0
 
-    sim_stim, sim_spikes, true_betas, true_mus = sim_GMMGLM(K, Wstd, drange=20000, delta=delta, d=d, Wtypes=Wtypes, NpK=NpK, downsample=downsample)
-    N = sim_spikes.shape[0]
+    
 
     print(np.sum(sim_spikes,axis=1))
     print(np.max(np.ravel(sim_spikes)))
@@ -410,7 +468,7 @@ def main_sim():
         
 ### uncomment the script you want to run
 
-if __name__ == "__main__":
-    main_sim()
-    # main_data()
-#    cProfile.run('main_sim()')
+# if __name__ == "__main__":
+#     main_sim()
+#     # main_data()
+# #    cProfile.run('main_sim()')

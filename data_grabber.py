@@ -81,7 +81,7 @@ for num in range(len(cell_ids)):
         drop_inds.append(num)
         print('drop')
     
-test_spk_counts = [np.sum([np.sum(s) for s in test_bspks[n]]) for n in range(N)]
+test_spk_counts = [np.sum([np.sum(s) for s in test_bspks[n]]) for n in range(len(test_bspks))]
 
 # dataframe with metadata for included cells
 all_new_cells = all_new_cells.drop(all_new_cells.index[drop_inds])

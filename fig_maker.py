@@ -400,6 +400,8 @@ for share in ['W','all']:
             simul_data = np.stack([np.array(simul_mets[Ki][i]) for Ki in range(Kfits.size)],axis=0)
             if shift:
                 simul_data-=simul_data[:1,:,:,:]
+            # else:
+            #     simul_data-=simul_data[:1,:,:,:]+np.mean()
             print(names[i],simul_data.shape)
             for f in range(simul_data.shape[-1]):
                 h1 = plt.errorbar(Kfits-0.15+0.1*f,np.nanmean(simul_data,axis=(1,2))[:,f],yerr=np.nanstd(simul_data,axis=(1,2))[:,f]/np.sqrt(np.sum(np.isfinite(simul_data[:,:,:,f]),axis=(1,2))))
@@ -486,25 +488,28 @@ for share in ['W','all']:
 
 ### Figure S7, S8
     for meth in methnames.keys():
-        fig,ax=plt.subplots()
         if meth=='simul':
             y2 = -np.array([[np.nanmean(m) for m in simul_mets[Ki][-2]] for Ki in range(Kfits.size)])
         else:
             y2 = np.array([[np.nanmean(m) for m in seq_mets[Ki][0]] for Ki in range(Kfits.size)])
-        y2 -= y2[0:1,:] #subtract off losses for K=1
-        h1 = ax.plot(Kfits,y2)[0]
-        ### select K using 1se rule
-        CV = np.mean(y2,axis=1)
-        Ksel = Kfits[np.argmin(Kfits-1000 * ( CV>np.max(CV)-np.std(y2,axis=1)/np.sqrt(y2.shape[1]) ) )]
-        h2 = ax.plot(Ksel,np.max(CV),'r*',markersize=10)[0]
-        ax.set_ylabel('Loglikelihood on held out neurons',fontsize=14)
-        ax.set_xticks(Kfits[::2])
-        ax.set_xlabel('K',fontsize=14)
-        plt.title(methnames[meth]+' Method',fontsize=14)
-        plt.legend([h1,h2],['LL of each fold', 'K selected by 1SE rule'],loc='lower right')
-        plt.tight_layout()
-        plt.savefig(savepath+'ivscc_'+meth+'_VLs_share='+share)
-        plt.close()
+        for ms1se in [False,True]:
+            fig,ax=plt.subplots()
+            if ms1se:
+                y2 -= y2[:1,:] #subtract off losses for K=1
+            h1 = ax.plot(Kfits,y2)[0]
+            if ms1se:
+                ### select K using 1se rule
+                CV = np.mean(y2,axis=1)
+                Ksel = Kfits[np.argmin(Kfits-1000 * ( CV>np.max(CV)-np.std(y2,axis=1)/np.sqrt(y2.shape[1]) ) )]
+                h2 = ax.plot(Ksel,np.max(CV),'r*',markersize=10)[0]
+                plt.legend([h1,h2],['LL of each fold', 'K selected by 1SE rule'],loc='lower right')
+            ax.set_ylabel('Loglikelihood on held out neurons',fontsize=14)
+            ax.set_xticks(Kfits[::2])
+            ax.set_xlabel('K',fontsize=14)
+            plt.title(methnames[meth]+' Method',fontsize=14)
+            plt.tight_layout()
+            plt.savefig(savepath+'ivscc_'+meth+'_VLs_share='+share+'_1se'*ms1se)
+            plt.close()
 
     
 ### Figures 4 A,C and S3 A,C
@@ -610,7 +615,8 @@ for share in ['W','all']:
             ax.set_ylim([len(used_ks)-0.5,-0.5])
             title = cat.replace('structure_','').replace('_',' ')
             ars = adjusted_rand_score(c_types,np.vectorize(opts_dict.get)(used_cells[cat].values[which]))
-            ax.set_title(title.capitalize()+'\n ARS = '+str(np.round(ars,2)),fontsize=14)
+            title_label = title.capitalize()#+'\n ARS = '+str(np.round(ars,2))
+            ax.set_title(title_label,fontsize=14)
 
             ax.set_xticklabels(np.core.defchararray.partition(opts[which_cols].astype('str'),'-')[:,0],rotation=-90*(i!=2))
             ax.set_ylabel('Cluster IDs',fontsize=14)
@@ -649,7 +655,7 @@ for share in ['W']: #we haven't done these analyses for case B yet
                         for trial in range(trials) if meth=='simul' else ['']:
                             fname = 'ivscc_n1t2v_'+meth+'reg_share_'+share+str(trial)+'_K='+str(12)+'l2i=0'*((meth=='simul') and (sub!='allN'))+'_sub='+str(sub)+('_seed='+str(seed))*(sub!='allN')+'_train_reps='+str(train_rep)
                             tr_D = np.load(fname+'.npz',allow_pickle = True)
-                            if meth=='seq' or tr_D['loss']<min_loss:# and (trial!=trial_max or tri!=2 or sli!=2):
+                            if meth=='seq' or tr_D['loss']<min_loss:
                                 min_loss = tr_D['loss'] if meth=='simul' else None
                                 D = tr_D
                         neurons = D['neuron_inds']
@@ -674,6 +680,9 @@ for share in ['W']: #we haven't done these analyses for case B yet
                         arss[:len(ARS),tri,sli,mi] = ARS
         np.savez('../summary_files/ivscc_scaling_data',tn_nnlls=tn_nnlls/hits,tn_corrs=tn_corrs/hits, hits=hits, arss=arss,cts=cts, vn_nnlls=vn_nnlls/vn_hits, vn_corrs=vn_corrs/vn_hits, vn_hits=vn_hits)
 
+    def test(x,y,paired,**kwargs):
+        return stats.ttest_ind(x[np.isfinite(x)],y[np.isfinite(y)],**kwargs) if not paired else stats.wilcoxon((x-y)[np.isfinite(x-y)],nan_policy='omit',**kwargs)
+
 ### Figure 5 B,D,F
     D = np.load('../summary_files/ivscc_scaling_data.npz')
     tn_nnlls = D['tn_nnlls']
@@ -697,24 +706,17 @@ for share in ['W']: #we haven't done these analyses for case B yet
                 if p_val<thresh:
                     plt.plot([c],[r],'w*',markersize=30)
                 if r < data.shape[1]-1:
-                    diff = rel_data[:,r,c]-rel_data[:,r+1,c]
-                    p_val = stats.wilcoxon(diff)[1]
+                    p_val = stats.wilcoxon(rel_data[:,r,c]-rel_data[:,r+1,c])[1]
                     r_diffs.append([rel_data[:,r,c],rel_data[:,r+1,c]])
                     if p_val<thresh:
                         plt.plot([c,c],[r+0.4,r+0.6],'w',linewidth=8)
                 if c < data.shape[2]-1:
-                    if di==2:
-                        p_val = stats.ttest_ind(rel_data[:,r,c+1],rel_data[:,r,c],nan_policy='omit')[1]
-                    else:
-                        diff = rel_data[:,r,c+1]-rel_data[:,r,c]
-                        p_val = stats.wilcoxon(diff)[1]
+                    p_val = test(rel_data[:,r,c+1],rel_data[:,r,c],di!=2)[1]
                     c_diffs.append([rel_data[:,r,c+1],rel_data[:,r,c]])
                     if p_val<thresh:
                         plt.plot([c+0.4,c+0.6],[r,r],'w',linewidth=8)
         c_diffs = np.array(c_diffs)
         r_diffs = np.array(r_diffs)
-        def test(x,y,paired,**kwargs):
-            return stats.ttest_ind(x[np.isfinite(x)],y[np.isfinite(y)],**kwargs) if not paired else stats.wilcoxon((x-y)[np.isfinite(x-y)],**kwargs)
         p_rl = test(np.ravel(r_diffs[:,0,:]),np.ravel(r_diffs[:,1,:]),True,alternative='less')[1]
         p_cl = test(np.ravel(c_diffs[:,0,:]),np.ravel(c_diffs[:,1,:]),di!=2,alternative='less')[1]
         print(slabels[di],'less',p_rl,p_cl)
@@ -729,10 +731,12 @@ for share in ['W']: #we haven't done these analyses for case B yet
         plt.yticks(range(len(train_reps)),train_reps)
         plt.colorbar()
         pr_str = str(np.format_float_scientific(min(p_cl,p_cg),precision=0))
-        sig_str = 'n.s.' if min(p_cl,p_cg)>0.1 else 'more are better, p='+pr_str if slabels[di].endswith('ANLL') == (p_cl<0.1) else 'fewer are better, p='+pr_str
+        sig_str = 'not significant' if min(p_cl,p_cg)>0.1 else 'more are better, p='+pr_str if slabels[di].endswith('ANLL') == (p_cl<0.1) else 'fewer are better, p='+pr_str
+        sig_str=''
         plt.xlabel('Fraction of neurons used in training \n' +sig_str,fontsize=14)
         pr_str = str(np.format_float_scientific(min(p_rl,p_rg),precision=0))
-        sig_str = 'n.s.' if min(p_rl,p_rg)>0.1 else 'fewer are better, p='+pr_str if slabels[di].endswith('ANLL') == (p_rl<0.1) else 'more are better, p='+pr_str
+        sig_str = 'not significant' if min(p_rl,p_rg)>0.1 else 'fewer are better, p='+pr_str if slabels[di].endswith('ANLL') == (p_rl<0.1) else 'more are better, p='+pr_str
+        sig_str=''
         plt.ylabel('Number of stimulus presentations\n used in training\n '+sig_str,fontsize=14)
         plt.title('Relative difference in '+labels[di],fontsize=14)
         plt.tight_layout()
