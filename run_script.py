@@ -14,11 +14,12 @@ import cProfile
 from helpers import *
 from models import *
 
+array_id_str = 'SLURM_ARRAY_TASK_ID' #slurm
+#array_id_str = 'PBS_ARRAYID' #pbs/moab/torque
     
 def main_data(seq_method=False,val_bins=False,all_n=True,subsub=False,share='W'):
-    D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
-
     os.chdir('files')
+    D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 
     stim = D['binned_stim']
     binned_spikes = D['binned_spikes']
@@ -230,7 +231,10 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
     id = os.getenv(array_id_str)
     id = 0 if id is None else int(id)
     downsample = 5
+    d=[10,20]
     trials = 20
+    Kfits = np.arange(1,21)
+
 
     if True: #simul betas
         simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
@@ -244,18 +248,19 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
 
     l2s_stim = np.logspace(-7,-1,13)
     l2s_self = np.logspace(-7,-1,13)
-    Kfits = np.arange(1,21)
     if seq_method:
         (l2_stim_i,l2_self_i) = np.unravel_index(id,(l2s_stim.size,l2s_self.size))
         fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
     else:
         l2s = [0.0] if share=='all' else l2s_stim
         (trial,Ki,l2_i) = np.unravel_index(id,(500,Kfits.size,l2s.size))
+        Kfit = Kfits[Ki]
         fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
 
     seed=0
     np.random.seed(seed)
     sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
+    N = sim_stim.shape[0]
 
     if seq_method:
         Ws = []
@@ -263,8 +268,7 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
         bs = []
         train_nnlls = []
         for n in range(N):
-            to_guess = np.hstack((np.squeeze(D['Fs'][n]),D['Ws'][n],np.expand_dims(D['bs'][n],0))) if guess else None
-            F, W, b, train_nnll, _ = fit_GLM(sim_stim[n],sim_spikes[n],d,dsns=False,l2_stim=l2s_stim[l2_stim_i],l2_self=l2s_self[l2_self_i],guess=to_guess,downsample=downsample)
+            F, W, b, train_nnll, _ = fit_GLM(sim_stim[n],sim_spikes[n],d,l2_stim=l2s_stim[l2_stim_i],l2_self=l2s_self[l2_self_i],downsample=downsample)
             train_nnlls.append(train_nnll)
             Fs.append(F)
             Ws.append(W)
@@ -441,7 +445,7 @@ def main_sim(seq_method = False,oracle = False,val_neurons = False,mod_select = 
                 train_nnlls = []
                 for n in range(N):
                     to_guess = np.hstack((np.squeeze(D['Fs'][n]),D['Ws'][n],np.expand_dims(D['bs'][n],0))) if guess else None
-                    F, W, b, train_nnll, _ = fit_GLM(sim_stim[n],sim_spikes[n],d,dsns=False,l2_stim=l2s_stim[l2_stim_i],l2_self=l2s_self[l2_self_i],guess=to_guess,downsample=downsample)
+                    F, W, b, train_nnll, _ = fit_GLM(sim_stim[n],sim_spikes[n],d,l2_stim=l2s_stim[l2_stim_i],l2_self=l2s_self[l2_self_i],guess=to_guess,downsample=downsample)
                     train_nnlls.append(train_nnll)
                     Fs.append(F)
                     Ws.append(W)

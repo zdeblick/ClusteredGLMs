@@ -79,19 +79,21 @@ def sim_GLM(stim, stim_filt, spk_filt, offset, downsample=1, smax=1, n_sims=1, n
 
 
 def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
-    Fs = D['Fs'], Ws = D['Ws'], bs = D['bs']
+    Fs = D['Fs']
+    Ws = D['Ws']
+    bs = D['bs']
     true_mus = D['mu_k']
     true_ks = np.argmax(D['Q'],axis=1)
     N = bs.size
     d = [Fs.shape[1],Ws.shape[1]]
     true_betas = np.zeros((N,d[0]+d[1]+1))
-    true_betas[:,:d[0] = Fs
+    true_betas[:,:d[0]] = Fs
     true_betas[:,d[0]:-1]  = Ws
-    true_betas[:,-1:] = bs
+    true_betas[:,-1] = bs
 
-    D = np.load('ivscc_data_n12.npz',allow_pickle=True)
-    sim_stim = [np.concatenate( D['binned_stim'][n].extend(D['test_binned_stim'][n]) ) for n in range(N)]
-    sim_stim = np.hstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
+    D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
+    sim_stim = [np.concatenate( D['binned_stim'][n]+D['test_binned_stim'][n] ) for n in range(N)]
+    sim_stim = np.vstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
     sim_stim /= np.max(sim_stim,axis=1,keepdims=True)
     sim_spikes = np.zeros_like(sim_stim)
     for n in range(N):
@@ -110,7 +112,7 @@ def sim_GMMGLM(K, Wstd, NpK=40, d = [10,20], drange = 20000, Wtypes=True, downsa
      - d: a length two iterable of filter lengths : [T^stim, T^self]
      - drange (int): how many time bins to simulate for each neuron
      - Wtypes (bool):  True -> only self interaction filters are generated from a cluster distribution
-     					False -> all GLM parameters are generated from a cluster distribution
+                         False -> all GLM parameters are generated from a cluster distribution
      - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
      - delta (float): scales the spacing between clusters. Fixed to 0.5 for all analyses shown in the paper
     """
@@ -163,8 +165,8 @@ def sim_GMMGLM(K, Wstd, NpK=40, d = [10,20], drange = 20000, Wtypes=True, downsa
 
     ### Generate responses to data
     D = np.load('ivscc_data_n12.npz',allow_pickle=True)
-    sim_stim = [np.concatenate( D['binned_stim'][n].extend(D['test_binned_stim'][n]) ) for n in range(N)]
-    sim_stim = np.hstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
+    sim_stim = [np.concatenate( D['binned_stim'][n]+D['test_binned_stim'][n] ) for n in range(N)]
+    sim_stim = np.vstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
     sim_stim /= np.max(sim_stim,axis=1,keepdims=True)
     sim_spikes = np.zeros_like(sim_stim)
     for n in range(N):
@@ -175,17 +177,17 @@ def sim_GMMGLM(K, Wstd, NpK=40, d = [10,20], drange = 20000, Wtypes=True, downsa
 
 ### Fitting
 def construct_Xdsn(flat_stimuluses, binned_spikeses, d, downsample=None):
-	"""
-	Make a design matrix of inputs and vector of outputs used for fitting a GLM for one neuron
-	Inputs:
-	 - flat_stimuluses: list of np arrays (trials by stim dimensions by time bins) of binned stimulus
-	 - binned_spikeses: list of np arrays (trials by time bins) of spiking responses
-	 - d: a length two iterable of filter lengths : [T^stim, T^self]
+    """
+    Make a design matrix of inputs and vector of outputs used for fitting a GLM for one neuron
+    Inputs:
+     - flat_stimuluses: list of np arrays (trials by stim dimensions by time bins) of binned stimulus
+     - binned_spikeses: list of np arrays (trials by time bins) of spiking responses
+     - d: a length two iterable of filter lengths : [T^stim, T^self]
      - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
     Outputs:
      - X_dsn (ndarray): samples by features design matrix of inputs
      - y (ndarray): vector of outputs for each sample
-	"""
+    """
 
     if type(flat_stimuluses) is np.ndarray:
         flat_stimuluses = (flat_stimuluses,)
@@ -225,25 +227,25 @@ def construct_Xdsn(flat_stimuluses, binned_spikeses, d, downsample=None):
 
 
 def fit_GLM(stim,spks,d,downsample=None,val_stim=None,val_spks=None,n_sims=1,sig=5,l2_stim=0,l2_self=0,guess=None):
-	"""
-	Fits a GLM to data one neuron, and provides metrics on training and (if provided) validation data
-	Inputs:
-	 - stim: list of np arrays (trials by stim dimensions by time bins) of binned stimulus used for fitting
-	 - spks: list of np arrays (trials by time bins) of spiking responses used for fitting
-	 - d: a length two iterable of filter lengths : [T^stim, T^self]
+    """
+    Fits a GLM to data one neuron, and provides metrics on training and (if provided) validation data
+    Inputs:
+     - stim: list of np arrays (trials by stim dimensions by time bins) of binned stimulus used for fitting
+     - spks: list of np arrays (trials by time bins) of spiking responses used for fitting
+     - d: a length two iterable of filter lengths : [T^stim, T^self]
      - downsample (int): the width in time bins of the moving average that pre-filters the stimulus
      - val_stim: list of np arrays (trials by stim dimensions by time bins) of binned stimulus used for validation
-	 - val_spks: list of np arrays (trials by time bins) of spiking responses used for validation
-	 - n_sims: number of spike trains simulated with fitted parameters used to calculate EV_ratio
-	 - sig: width (in time bins) of gaussian kernel used to smoothe spike trains when calculating EV_ratio
-	 - l2_stim, l2_self: L2 regularization hyperparameters for simulus and self-interaction filter coefficients
-	 - guess (ndarray): a length T^stim * M + T^self + 1 vector - initial guess for the parameters, used by optimizer
+     - val_spks: list of np arrays (trials by time bins) of spiking responses used for validation
+     - n_sims: number of spike trains simulated with fitted parameters used to calculate EV_ratio
+     - sig: width (in time bins) of gaussian kernel used to smoothe spike trains when calculating EV_ratio
+     - l2_stim, l2_self: L2 regularization hyperparameters for simulus and self-interaction filter coefficients
+     - guess (ndarray): a length T^stim * M + T^self + 1 vector - initial guess for the parameters, used by optimizer
     Outputs:
      - stim_filt (MxT^stim array), spk_filt (length T^self vector), b (float): fitted model parameters
      - train_nnll (float): ANLL of this neuron's response to the training stimulus
      - train_corr (float): EV_ratio of this neuron's response to the training stimulus
      - val_nnll, val_corr: same as above, returned only if validation data is provided
-	"""
+    """
 
     if type(stim) is np.ndarray:
         stim = (stim,)
@@ -285,21 +287,19 @@ def fit_GLM(stim,spks,d,downsample=None,val_stim=None,val_spks=None,n_sims=1,sig
 
 
 class CellTypesModel:
-	"""
-	A class that uses the 'simultaneous method' to fit a hierarchical model of clustered GLMs 
-	to a dataset of neural spiking responses to stimuli, evaluate the model, and store results in memory.
-	Inputs:
+    """
+    A class that uses the 'simultaneous method' to fit a hierarchical model of clustered GLMs 
+    to a dataset of neural spiking responses to stimuli, evaluate the model, and store results in memory.
+    Inputs:
 
-	Outputs:
-	"""
+    Outputs:
+    """
     def __init__(self,d,K,shared_stim=False,family=sm.families.Poisson(),cov_mode='diag',share='W',W_min = -15,hess_alg = 'trust-ncg',m_it_GLM=200,fname='run',reload = False,l2=0.0,downsample=None,sig=5,n_sims=1,**kwargs):
         self.conv = np.inf
         self.losses = []
         self.convs = []
         self.iter = 0
-        self.ind_mus = np.zeros((N,K,d_s))
-        self.ind_sig2s = np.ones((N,K,d_s,d_s))
-        self.Q = np.zeros((N,K))
+
         
         ### Load attriutes from file and kwargs, if present
         if reload:
@@ -322,6 +322,7 @@ class CellTypesModel:
         d_s = shared_i.size
         shared_i2 = (np.repeat(shared_i,d_s),np.tile(shared_i,d_s))
 
+        L_dsn = 1*d[0]+d[1]+1
         reg_i = np.setdiff1d(np.arange(L_dsn-1),shared_i)
         d_r = reg_i.size
         reg_i2 = (np.repeat(reg_i,d_r),np.tile(reg_i,d_r))
@@ -331,18 +332,14 @@ class CellTypesModel:
         self.downsample=downsample
         self.sig=sig
         self.n_sims = n_sims
-        self.stim = stim
-        self.spks = spks
         self.shared_stim = shared_stim
         self.fname=fname
         self.W_min = W_min
         self.m_it_GLM = m_it_GLM
         self.hess_alg=hess_alg
         self.cov_mode=cov_mode
-        self.T_dsns=T_dsns
         self.L_dsn=L_dsn
         self.K = K
-        self.N = N
         self.d_s = d_s
         self.d = d
         self.shared_i = shared_i
@@ -393,10 +390,10 @@ class CellTypesModel:
 
 
     def fit_GLMs(self,X_dsns,ys):
-    	N = len(X_dsns)
-        T_dsns=self.T_dsns
-        L_dsn=self.L_dsn
-    	d_s = self.d_s
+        N = len(X_dsns)
+        T_dsns=[X.shape[0] for X in X_dsns]
+        L_dsn=X_dsns[0].shape[1]
+        d_s = self.d_s
         shared_i = self.shared_i
         shared_i2 = self.shared_i2
         d_r = self.d_r
@@ -409,7 +406,7 @@ class CellTypesModel:
             fun = lambda p: -model.loglike(p)/ys[n].size + 1/2*self.l2*np.sum(np.square(p[reg_i]))
             jac = lambda p: -model.score(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn)),reg_i,p[reg_i])
             hess = lambda p: -model.hessian(p)/ys[n].size + self.l2*self.put(np.zeros((L_dsn,L_dsn)),reg_i2,np.eye(d_r))
-            res = minimize(fun,np.random.rand(L_dsn),jac=jac,hess=hess,method=self.hess_alg,options={'maxiter':m_it_GLM, 'disp':False},tol=1e-6)
+            res = minimize(fun,np.random.rand(L_dsn),jac=jac,hess=hess,method=self.hess_alg,options={'maxiter':self.m_it_GLM, 'disp':False},tol=1e-6)
             ind_p[n,:] = res.x
         self.ind_p = ind_p
 
@@ -438,8 +435,8 @@ class CellTypesModel:
     def update(self,X_dsns,ys,verbose=True):
         K=self.K
         N=len(X_dsns)
-        T_dsns=self.T_dsns
-        L_dsn=self.L_dsn
+        T_dsns=[X.shape[0] for X in X_dsns]
+        L_dsn=X_dsns[0].shape[1]
         d_s = self.d_s
         shared_i = self.shared_i
         shared_i2 = self.shared_i2
@@ -508,16 +505,19 @@ class CellTypesModel:
 
 
     def fit(self,stim,spks,n_init=1,max_it=5,m_it_GMM=100,tol=1e-5,verbose=True,results=True,val_stim=None,val_spks=None):
-		N = len(spks) if type(spks) is list else spks.shape[0]
+        N = len(spks) if type(spks) is list else spks.shape[0]
+        K = self.K
+        d_s = self.d_s
+        d = self.d
 
         #create design matrices
         X_dsns = []
         ys = []
         for n in range(N):
-            if shared_stim:
-                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=downsample)
+            if self.shared_stim:
+                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=self.downsample)
             else:
-                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=downsample)
+                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=self.downsample)
             X_dsns.append(X_dsn)
             ys.append(y)
 
@@ -525,9 +525,13 @@ class CellTypesModel:
         L_dsn = X_dsns[-1].shape[1]
         self.train_spikes = [np.sum(y) for y in ys]
 
-    	self.fit_GLMs(X_dsns,ys)
+        self.fit_GLMs(X_dsns,ys)
 
         if self.iter == 0:
+            self.ind_mus = np.zeros((N,K,d_s))
+            self.ind_sig2s = np.ones((N,K,d_s,d_s))
+            self.Q = np.zeros((N,K))
+
             if verbose:
                 print('Starting E-M')
 
@@ -537,7 +541,7 @@ class CellTypesModel:
             self.iter = 1
             for init in range(n_init):
                 self.fit_GMM(m_it_GMM=100)
-                self.update(verbose=verbose)# could update multiple times if desired
+                self.update(X_dsns,ys,verbose=verbose)# could update multiple times if desired
                 if verbose:
                     print('Init '+ str(init)+': loss = '+str(self.loss))
                 if self.loss<best_loss:
@@ -562,9 +566,9 @@ class CellTypesModel:
             self.save()
 
             #convergence check
-            c = [np.max(np.abs(ind_mus_old-self.ind_mus)[np.arange(self.N),np.argmax(self.Q,axis=1),:]),
-                           np.max(np.abs(mu_old-self.mu_k)[(~np.array(self.bad))*(self.wts>1/(2*self.N))]),
-                           np.max(np.abs(Ck_old-self.C_k)[(~np.array(self.bad))*(self.wts>1/(2*self.N))]),
+            c = [np.max(np.abs(ind_mus_old-self.ind_mus)[np.arange(N),np.argmax(self.Q,axis=1),:]),
+                           np.max(np.abs(mu_old-self.mu_k)[(~np.array(self.bad))*(self.wts>1/(2*N))]),
+                           np.max(np.abs(Ck_old-self.C_k)[(~np.array(self.bad))*(self.wts>1/(2*N))]),
                            np.max(np.abs(Q_old-self.Q)),
                            np.max(np.abs(wts_old-self.wts))]
             self.conv = (self.losses[-2]-self.losses[-1])/self.losses[-1]
@@ -584,13 +588,13 @@ class CellTypesModel:
                 print('Iteration '+ str(self.iter)+': loss = '+str(self.loss)+', conv = '+str(self.conv))
 
         if results:
-        	self.results(stim,X_dsns,ys,val_stim=val_stim,val_spks=val_spks)
+            return self.results(stim,spks,X_dsns,ys,val_stim=val_stim,val_spks=val_spks)
 
-	def results(self,stim,X_dsns,ys,val_stim=None,val_spks=None,prefix='val'):
+    def results(self,stim,spks,X_dsns,ys,val_stim=None,val_spks=None,prefix='val'):
         K=self.K
         N=len(X_dsns)
-        T_dsns=self.T_dsns
-        L_dsn=self.L_dsn
+        T_dsns=[X.shape[0] for X in X_dsns]
+        L_dsn=X_dsns[0].shape[1]
         d_s = self.d_s
         d=self.d
 
@@ -602,8 +606,9 @@ class CellTypesModel:
             k = np.argmax(self.Q[n,:])
             p_MAP[n,:] = self.p[n,k,:]
             train_nnlls[n] = -model.loglike(p_MAP[n,:])/T_dsns[n]
-            sim_spks = sim_GLM(stim[n][0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
-            train_corrs[n] = EVratio(sim_spks,self.spks[n],self.sig)
+            if type(spks[n])==list:
+                sim_spks = sim_GLM(stim[n][0],p_MAP[n,:-1-d[1]],p_MAP[n,-1-d[1]:-1],p_MAP[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
+                train_corrs[n] = EVratio(sim_spks,spks[n],self.sig)
 
 
         if self.cov_mode=='full':
@@ -636,10 +641,10 @@ class CellTypesModel:
 
 
     def val_neurons(self,stim,spks,verbose=True, val_stim=None,val_spks=None):
-        self.val_spikes = [np.sum(y) for y in ys]
+        N = len(spks) if type(spks) is list else spks.shape[0]
+        self.val_spikes = [np.sum(y) for y in spks]
         K=self.K
-        T_dsns=self.T_dsns
-        L_dsn=self.L_dsn
+        
         d=self.d
         d_s = self.d_s
         shared_i = self.shared_i
@@ -647,6 +652,19 @@ class CellTypesModel:
         d_r = self.d_r
         reg_i = self.reg_i
         reg_i2 = self.reg_i2
+
+        #create design matrices
+        X_dsns = []
+        ys = []
+        for n in range(N):
+            if self.shared_stim:
+                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=self.downsample)
+            else:
+                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=self.downsample)
+            X_dsns.append(X_dsn)
+            ys.append(y)
+        T_dsns=[X.shape[0] for X in X_dsns]
+        L_dsn=X_dsns[0].shape[1]
 
         logposts = -np.inf*np.ones((N,K))
         self.Q_val = np.zeros((N,K))
@@ -656,18 +674,6 @@ class CellTypesModel:
         self.val_neurons_train_corrs = np.zeros((N,))
         self.val_neurons_train_nnlls = np.zeros((N,))
 
-        N = len(spks) if type(spks) is list else spks.shape[0]
-
-        #create design matrices
-        X_dsns = []
-        ys = []
-        for n in range(N):
-            if shared_stim:
-                X_dsn, y = construct_Xdsn(stim,spks[n],d,downsample=downsample)
-            else:
-                X_dsn, y = construct_Xdsn(stim[n],spks[n],d,downsample=downsample)
-            X_dsns.append(X_dsn)
-            ys.append(y)
 
 
         time1 = time.time()
@@ -700,7 +706,7 @@ class CellTypesModel:
             model =  sm.GLM(ys[n],X_dsns[n],family = self.family)
             self.val_neurons_train_nnlls[n] = -model.loglike(self.p_MAP_val[n,:])/T_dsns[n]
             sim_spks = sim_GLM(self.stim[n][0],self.p_MAP_val[n,:-1-d[1]],self.p_MAP_val[n,-1-d[1]:-1],self.p_MAP_val[n,-1],downsample = self.downsample,n_sims=self.n_sims)[0]
-            self.val_neurons_train_corrs[n] = EVratio(sim_spks,self.spks[n],self.sig)
+            self.val_neurons_train_corrs[n] = EVratio(sim_spks,spks[n],self.sig)
 
         prefix = 'val_neurons_val'
         out_dict={}

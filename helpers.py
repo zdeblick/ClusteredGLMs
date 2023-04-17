@@ -5,6 +5,9 @@ from mpl_toolkits import axes_grid1
 def rms(x):
     return np.sqrt(np.mean(np.square(x)))
 
+def fff(p):
+    print(p.shape)
+    return 0
 
 def rmst(true,est,thresh=-4): 
     return rms((np.ravel(true)-np.ravel(est))[np.ravel(true)>thresh])
