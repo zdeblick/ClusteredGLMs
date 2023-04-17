@@ -90,27 +90,27 @@ At this point, your environment should be in the same state as after running all
 (Steps 3-5 can run concurrently)
 ### Step 3: Fit all the models to simulated data
 
-Set script to run main_sim()
+3a: Select hyperparameters on the "oracle" datasets (3a1=seq, 3a2=simul). Note that 3a2 is unneccessary for case B (`share='all'`)
 
-3a: Select hyperparameters on the "oracle" datasets
+3b: Fit models to all other datasets with true K, varying sigma (3a1=seq, 3a2=simul)
 
-3b: Fit models to all other datasets
-
-3c: Test on held out neurons
+3c: Fit with varying K, a couple sigma, and eval on held out neurons (3a1=seq, 3a2=simul)
 
 
 ### Step 4: Fit sequential models to IVSCC data
 
-Set script to run main_data()
-
 4a: Fit GLMs and select lambda^stim,lambda^self (all neurons)
 
-4b: Fit GMMs (all neurons, and subsets of neurons)
+4b: Fit GMMs (all neurons (4b1), and subsets of neurons (4b2 and 4b3))
 
 
 ### Step 5: Fit simultaneous models to IVSCC data
 
-Set script to be run to main_data()
+5a: big subsets of neurons
+
+5b: small subsets of neurons
+
+5c: all subsets of neurons
 
 
 ### Step 6: Generate figures:
@@ -119,6 +119,15 @@ Set script to be run to main_data()
 
 To re-generate the summary files (which are used to make the figures) from the models you fit in steps 3-5, set `run = True`
 
+### Step 7: Run supplementary analysis of fitting to data simulated using IVSCC-fitted parameters
+
+7a: Sequential
+
+7b: Simultaneous
+
+### Step 8: Generate figure S!!!:
+
+	python sim_from_fit_figmaker.py
 
 # TODO (!!!): 
 
