@@ -8,7 +8,7 @@ from helpers import *
 
 os.chdir('files')
 savepath = '../figs/'
-run=False
+run=True
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
@@ -41,7 +41,7 @@ Kfits = np.arange(1,21)
 l2s = np.logspace(-7,-1,13)
 
 share = 'W'
-trials = 20
+trials = 18
 
 simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
 K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
@@ -69,10 +69,11 @@ if run:
                         simul_bics[Ki,trial] = D['BIC']
                         max_BIC=D['BIC']
                         if Kfit==K_max:
-                            simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts']}
+                            simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts','l2']}
                 except Exception as e:
                     if True:
                         print(fname,e)
+    print(simul_D['l2'])
     simul_D['BICs'] = simul_bics
     np.savez('../summary_files/ivscc_sims_share'+share,simul_D=simul_D)
 D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
@@ -94,6 +95,7 @@ if run:
     l2_stim_i = np.argmin(np.min(errors[:,:,0],axis=1))
     l2_self_i = np.argmin(np.min(errors[:,:,1],axis=0))
     fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
+    print(l2_stim_i,l2_self_i)
     D = np.load(fname+'.npz',allow_pickle=True)
     if share=='W':
         betas = D['Ws']
