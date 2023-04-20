@@ -14,6 +14,8 @@ D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
 dt = D['bin_len']*1000 #ms
 N=len(all_spks)
+d = [10,20]
+downsample = 5
 
 #Autocorrelation figure
 lags = 1100
@@ -68,15 +70,14 @@ if run:
                         max_BIC=D['BIC']
                         if Kfit==K_max:
                             simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts']}
-                except:
-                    if False:
-                        print(fname)
+                except Exception as e:
+                    if True:
+                        print(fname,e)
     simul_D['BICs'] = simul_bics
     np.savez('../summary_files/ivscc_sims_share'+share,simul_D=simul_D)
 D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
 simul_D = D['simul_D'][()]
 
-run=True
 if run:
     # Sequential
     seq_bics = np.zeros((Kfits.size,trials))
@@ -88,10 +89,10 @@ if run:
                 D = np.load(fname+'.npz',allow_pickle=True)
                 errors[l2_stim_i,l2_self_i,0] = rms(np.ravel(np.squeeze(D['Fs'])-true_Fs)[np.ravel(true_Fs)>thresh])
                 errors[l2_stim_i,l2_self_i,1] = rms(np.ravel(D['Ws']-true_Ws)[np.ravel(true_Ws)>thresh])
-                l2_stim_i = np.argmin(np.min(errors[:,:,0],axis=1))
-                l2_self_i = np.argmin(np.min(errors[:,:,1],axis=0))
             except:
                 print(fname)
+    l2_stim_i = np.argmin(np.min(errors[:,:,0],axis=1))
+    l2_self_i = np.argmin(np.min(errors[:,:,1],axis=0))
     fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
     D = np.load(fname+'.npz',allow_pickle=True)
     if share=='W':
@@ -116,10 +117,12 @@ if run:
 D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
 
 # Figure
+hs = []
+labels = []
 plot_data = [
     ('True', true_mus, Sig_to_sigs(true_Sigmas), 'k'),
-    ('Simultaneous', D['simul_D']['mu_k'], Sig_to_sigs(D['simul_D']['C_k']), 'r'), 
-    ('Sequential', D['seq_D']['mu_k'], Sig_to_sigs(D['seq_D']['C_k']),'c')]
+    ('Simultaneous', D['simul_D'][()]['mu_k'], Sig_to_sigs(D['simul_D'][()]['C_k']), 'r'), 
+    ('Sequential', D['seq_D'][()]['mu_k'], Sig_to_sigs(D['seq_D'][()]['C_k']),'c')]
 for label, means, sds, color in plot_data:
     h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
     hs.append(h[0])
