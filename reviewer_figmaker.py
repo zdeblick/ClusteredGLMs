@@ -10,7 +10,7 @@ prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
 os.chdir('files')
 savepath = '../figs/'
-run=False
+run=True
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
@@ -67,8 +67,8 @@ if run:
                 fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
                 try:
                     D = np.load(fname+'.npz',allow_pickle=True)
+                    simul_bics[Ki,trial] = D['BIC']
                     if D['BIC']>max_BIC:
-                        simul_bics[Ki,trial] = D['BIC']
                         max_BIC=D['BIC']
                         if Kfit==K_max:
                             simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts','l2']}
