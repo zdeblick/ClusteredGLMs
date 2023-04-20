@@ -4,10 +4,11 @@ import matplotlib.pyplot as plt
 from sklearn.metrics import confusion_matrix, pairwise_distances, adjusted_rand_score
 from sklearn.mixture import GaussianMixture
 import os
+from helpers import *
 
 os.chdir('files')
 savepath = '../figs/'
-run=True
+run=False
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
@@ -50,6 +51,7 @@ true_Ws = D_true['Ws']
 true_mus = D_true['mu_k']
 true_Sigmas = D_true['C_k']
 thresh=-4
+Sig_to_sigs = lambda X: [np.sqrt(np.diag(X[k])) if len(X[k].shape)==2 else np.sqrt(X[k]) for k in range(len(X))]
 
 # Simultaneous
 if run:
@@ -64,18 +66,23 @@ if run:
                     if D['BIC']>max_BIC:
                         simul_bics[Ki,trial] = D['BIC']
                         max_BIC=D['BIC']
-                        if K==K_max:
+                        if Kfit==K_max:
                             simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts']}
                 except:
-                    print(fname)
-    simul_D['BICs'] = simul_BICs
+                    if False:
+                        print(fname)
+    simul_D['BICs'] = simul_bics
     np.savez('../summary_files/ivscc_sims_share'+share,simul_D=simul_D)
+D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
+simul_D = D['simul_D'][()]
 
+run=True
+if run:
     # Sequential
     seq_bics = np.zeros((Kfits.size,trials))
     errors = -np.inf*np.ones((l2s.size,l2s.size,2))
-    for l2stim_i in range(l2s.size):
-        for l2self_i in range(l2s.size):
+    for l2_stim_i in range(l2s.size):
+        for l2_self_i in range(l2s.size):
             fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
             try:
                 D = np.load(fname+'.npz',allow_pickle=True)
@@ -101,8 +108,8 @@ if run:
             seq_bics[Ki,trial] = bic
             if bic>max_bic:
                 max_bic=bic
-                seq_D = {'ars':adjusted_rand_score(D['true_ks'],
-                    gmm.predict(betas)),'mu_k':gmm.means_,'C_k':gmm.covariances_,'wts':gmm._weights}
+                seq_D = {'ars':adjusted_rand_score(D['true_ks'],gmm.predict(betas)),
+                    'mu_k':gmm.means_,'C_k':gmm.covariances_,'wts':gmm.weights_}
     seq_D.update({k:D[k] for k in ['Ws','Fs','bs']})
     seq_D['BICs'] = seq_bics
     np.savez('../summary_files/ivscc_sims_share'+share,seq_D=seq_D,simul_D=simul_D)
@@ -110,9 +117,9 @@ D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
 
 # Figure
 plot_data = [
-    ('True', true_mus, np.sqrt(np.diag(true_Sigmas)), 'k'),
-    ('Simultaneous', D['simul_D']['mu_k'], np.sqrt(D['simul_D']['C_k']), 'r'), 
-    ('Sequential', D['seq_D']['mu_k'], np.sqrt(D['seq_D']['C_k']),'c')]
+    ('True', true_mus, Sig_to_sigs(true_Sigmas), 'k'),
+    ('Simultaneous', D['simul_D']['mu_k'], Sig_to_sigs(D['simul_D']['C_k']), 'r'), 
+    ('Sequential', D['seq_D']['mu_k'], Sig_to_sigs(D['seq_D']['C_k']),'c')]
 for label, means, sds, color in plot_data:
     h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
     hs.append(h[0])
