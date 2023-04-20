@@ -10,7 +10,7 @@ prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
 os.chdir('files')
 savepath = '../figs/'
-run=True
+run=False
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
@@ -54,6 +54,7 @@ true_Fs = D_true['Fs']
 true_Ws = D_true['Ws']
 true_mus = D_true['mu_k']
 true_Sigmas = D_true['C_k']
+true_wts = D_true['wts']
 thresh=-4
 Sig_to_sigs = lambda X: [np.sqrt(np.diag(X[k])) if len(X[k].shape)==2 else np.sqrt(X[k]) for k in range(len(X))]
 
@@ -111,7 +112,7 @@ if run:
             gmm.fit(betas)
             bic = -gmm.bic(betas)
             seq_bics[Ki,trial] = bic
-            if bic>max_bic:
+            if bic>max_bic and Kfit==K_max:
                 max_bic=bic
                 seq_D = {'ars':adjusted_rand_score(D['true_ks'],gmm.predict(betas)),
                     'mu_k':gmm.means_,'C_k':gmm.covariances_,'wts':gmm.weights_}
@@ -125,11 +126,11 @@ fig,ax = plt.subplots()
 hs = []
 labels = []
 plot_data = [
-    ('True', true_mus, Sig_to_sigs(true_Sigmas), 'k'),
-    ('Simultaneous', D['simul_D'][()]['mu_k'], Sig_to_sigs(D['simul_D'][()]['C_k']), 'r'), 
-    ('Sequential', D['seq_D'][()]['mu_k'], Sig_to_sigs(D['seq_D'][()]['C_k']),'c')]
-for label, means, sds, color in plot_data:
-    h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
+    ('True', true_mus, Sig_to_sigs(true_Sigmas), true_wts, 'k'),
+    ('Simultaneous', D['simul_D'][()]['mu_k'], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
+    ('Sequential', D['seq_D'][()]['mu_k'], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
+for label, means, sds, wts, color in plot_data:
+    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.05,:].T,color+'-')
     hs.append(h[0])
     labels.append(label)
 plt.xlabel('Time (ms)',fontsize=14)
@@ -142,7 +143,6 @@ plt.close()
 # BIC figures
 plot_data = [('Simultaneous',D['simul_D'][()]['BICs']), ('Sequential',D['seq_D'][()]['BICs'])]
 for meth, bics in plot_data:
-    print(bics)
     bics-=np.max(bics)
     fig,ax = plt.subplots()
     ax.plot(Kfits,bics,'o',c=colors[0])

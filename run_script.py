@@ -262,6 +262,8 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
     sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
     N = sim_stim.shape[0]
 
+    np.random.seed(int(time.time()*10000000000000)%(2**32))
+    
     if seq_method:
         Ws = []
         Fs = []
