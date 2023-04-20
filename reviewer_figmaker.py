@@ -6,9 +6,11 @@ from sklearn.mixture import GaussianMixture
 import os
 from helpers import *
 
+prop_cycle = plt.rcParams['axes.prop_cycle']
+colors = prop_cycle.by_key()['color']
 os.chdir('files')
 savepath = '../figs/'
-run=True
+run=False
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
 all_spks = D['binned_spikes']
@@ -57,7 +59,7 @@ Sig_to_sigs = lambda X: [np.sqrt(np.diag(X[k])) if len(X[k].shape)==2 else np.sq
 
 # Simultaneous
 if run:
-    simul_bics = np.zeros((Kfits.size,trials))
+    simul_bics = -np.inf*np.ones((Kfits.size,trials))
     for Ki,Kfit in enumerate(Kfits):
         for l2_i in range(l2s.size):
             max_BIC = -np.inf
@@ -81,7 +83,7 @@ simul_D = D['simul_D'][()]
 
 if run:
     # Sequential
-    seq_bics = np.zeros((Kfits.size,trials))
+    seq_bics = -np.inf*np.ones((Kfits.size,trials))
     errors = -np.inf*np.ones((l2s.size,l2s.size,2))
     for l2_stim_i in range(l2s.size):
         for l2_self_i in range(l2s.size):
@@ -118,7 +120,8 @@ if run:
     np.savez('../summary_files/ivscc_sims_share'+share,seq_D=seq_D,simul_D=simul_D)
 D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
 
-# Figure
+# Clusters Figure
+fig,ax = plt.subplots()
 hs = []
 labels = []
 plot_data = [
@@ -135,6 +138,23 @@ ax.set_ylim([-4,2])
 plt.legend(hs,labels,fontsize=14)
 plt.savefig(savepath+'ivscc_sims_clusters_share='+share+'.png',bbox_inches='tight')
 plt.close()
+
+# BIC figures
+plot_data = [('Simultaneous',D['simul_D'][()]['BICs']), ('Sequential',D['seq_D'][()]['BICs'])]
+for meth, bics in plot_data:
+    print(bics)
+    bics-=np.max(bics)
+    fig,ax = plt.subplots()
+    ax.plot(Kfits,bics,'o',c=colors[0])
+    ax.plot(Kfits,np.max(bics,axis=1),c=colors[0])
+    ax.set_ylim([-1600,100])
+    ax.set_xticks(Kfits[::2])
+    ax.set_xlabel('K',fontsize=14)
+    ax.set_ylabel('BIC',fontsize=14)
+    plt.title(meth+' Method',fontsize=14)
+    plt.tight_layout()
+    plt.savefig(savepath+'ivscc_sims_'+meth+'_BIC_share='+share)
+    plt.close()
 
 
 
