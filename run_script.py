@@ -226,7 +226,7 @@ def main_data(seq_method=False,val_bins=False,all_n=True,subsub=False,share='W')
     return True
 
 
-def main_sim_from_ivscc(seq_method = False, share='W'):
+def main_sim_from_ivscc(seq_method = False, share='all'):
     os.chdir('files')
     id = os.getenv(array_id_str)
     id = 0 if id is None else int(id)
@@ -236,14 +236,14 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
     Kfits = np.arange(1,21)
 
 
-    if True: #simul betas
+    if False: #simul betas
         simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
         K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
         trial_max = np.argmax(simulBICs[Kfits==K_max,:])
         D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
     else: #seq betas
-        simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
-        K_max=Kfits[np.argmax(simulBICs)]
+        seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
+        K_max=Kfits[np.argmax(np.max(seqBICs,axis=1))]
         D = np.load('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all'+'.npz',allow_pickle=True)
 
     l2s_stim = np.logspace(-7,-1,13)
@@ -253,13 +253,13 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
         fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
     else:
         l2s = [0.0] if share=='all' else l2s_stim
-        (trial,Ki,l2_i) = np.unravel_index(id,(500,Kfits.size,l2s.size))
-        Kfit = Kfits[Ki]
+        (trial,l2_i) = np.unravel_index(id,(500,l2s.size))
+        Kfit = K_max
         fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
 
     seed=0
     np.random.seed(seed)
-    sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
+    sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000)
     N = sim_stim.shape[0]
 
     np.random.seed(int(time.time()*10000000000000)%(2**32))

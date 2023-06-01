@@ -5,41 +5,106 @@ from sklearn.metrics import confusion_matrix, pairwise_distances, adjusted_rand_
 from sklearn.mixture import GaussianMixture
 import os
 from helpers import *
+from scipy.optimize import linear_sum_assignment
+
 
 prop_cycle = plt.rcParams['axes.prop_cycle']
 colors = prop_cycle.by_key()['color']
 os.chdir('files')
 savepath = '../figs/'
-run=False
+run=True
+Kfits = np.arange(1,21)
+import colorcet as cc
+cmap = cc.cm.rainbow
+import matplotlib as mpl 
+mpl.rcParams['xtick.labelsize'] = 14
+mpl.rcParams['ytick.labelsize'] = 14
+mpl.rcParams['axes.labelsize'] = 14
+mpl.rcParams['figure.max_open_warning'] = 100
+
+# Comparing all 4 best solutions
+fnames = []
+for share in ['W','all']:
+    #Simultaneous
+    simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
+    K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
+    trial_max = np.argmax(simulBICs[Kfits==K_max,:])
+    fnames.append('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all')
+
+    #Sequential
+    seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
+    K_max=Kfits[np.argmax(np.max(seqBICs,axis=1))]
+    fnames.append('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all')
+Ds = [np.load(fname+'.npz',allow_pickle=True) for fname in fnames]
+cases = ['A','A','B','B']
+meths = ['Simultaneous','Sequential']*2
+for i in range(len(Ds)):
+    for j in range(i):
+        fig,ax = plt.subplots()
+        cm = confusion_matrix(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
+        row_inds,col_inds = linear_sum_assignment(-cm)
+        cm = cm[row_inds,:][:,col_inds]
+        cm = cm[:,np.sum(cm,axis=0)>0][np.sum(cm,axis=1)>0,:]
+        cm = cm/(np.sqrt(np.sum(cm,axis=1,keepdims=True)*np.sum(cm,axis=0,keepdims=True)))
+        im = ax.imshow(cm,origin='lower',cmap=cc.cm.blues)#,vmin=0,vmax=50)
+        ars = adjusted_rand_score(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
+        ax.set_title('ARS='+str(np.round(ars,2)))
+
+        ax.set_xlim([-0.5,cm.shape[1]-0.5])
+        ax.set_ylim([cm.shape[0]-0.5,-0.5])
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_ylabel(meths[i]+' method, case '+cases[i])
+        ax.set_xlabel(meths[j]+' method, case '+cases[j])
+        pixel_size_in = 0.35
+        set_size(pixel_size_in*cm.shape[1],pixel_size_in*cm.shape[0],ax=ax)
+
+        plt.savefig(savepath+'khat_comps_'+meths[i]+cases[i]+'_vs_'+meths[j]+cases[j]+'.png',bbox_inches='tight')
+        plt.close() 
+
+stop
+
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
-all_spks = D['binned_spikes']
+all_spks = D['binned_stim']
 dt = D['bin_len']*1000 #ms
 N=len(all_spks)
 d = [10,20]
 downsample = 5
 
 #Autocorrelation figure
-lags = 1100
+lags = 5100
 if run:
     autocorrs = np.zeros((N,2*lags+1))
     for n in range(N):
         spks = np.hstack(all_spks[n])
+        spks-=np.mean(spks)
         c = correlate(spks,spks)
         autocorrs[n,:] = c[(c.size-1)//2-lags:(c.size-1)//2+lags+1]/c[(c.size-1)//2]
     np.savez('../summary_files/ivscc_data_autocorrs',autocorrs=autocorrs)
 autocorrs = np.load('../summary_files/ivscc_data_autocorrs.npz')['autocorrs']
 
+which_lags = np.arange(-lags,lags+1)%500!=0
+autocorrs = autocorrs[:,which_lags]
+sm_l = 41
+autocorrs = correlate(autocorrs,np.ones((1,sm_l))/sm_l,mode='same')
+autocorrs/=np.max(autocorrs,keepdims=True,axis=1)
+which_lags[:sm_l] = False
+which_lags[-sm_l:] = False
 fig,ax = plt.subplots()
-plt.plot(dt*np.arange(-lags,lags+1)/1000, autocorrs[:5,:].T)
+plt.plot((dt*np.arange(-lags,lags+1)/1000)[which_lags], autocorrs[:10,sm_l:-sm_l].T,linewidth=0.8)
 plt.xlabel('Time (s)',fontsize=14)
-plt.ylabel('Cross-correlation of spiking responses',fontsize=14)
+plt.ylabel('Autocorrelation of stimulus',fontsize=14)
+# plt.xlim(-1.01,-0.99)
+plt.xticks(np.arange(-9,10,3))
+plt.grid()
 plt.savefig(savepath+'ivscc_autocorrs')
+plt.show()
 plt.close()
 
-
+stop
 # IVSCC-based simulations
-Kfits = np.arange(1,21)
+
 l2s = np.logspace(-7,-1,13)
 
 share = 'W'
@@ -130,7 +195,7 @@ plot_data = [
     ('Simultaneous', D['simul_D'][()]['mu_k'], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
     ('Sequential', D['seq_D'][()]['mu_k'], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
 for label, means, sds, wts, color in plot_data:
-    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.05,:].T,color+'-')
+    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.03,:].T,color+'-')
     hs.append(h[0])
     labels.append(label)
 plt.xlabel('Time (ms)',fontsize=14)

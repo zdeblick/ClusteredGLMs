@@ -78,14 +78,26 @@ def sim_GLM(stim, stim_filt, spk_filt, offset, downsample=1, smax=1, n_sims=1, n
     return spks, rate
 
 
-def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
-    Fs = D['Fs']
-    Ws = D['Ws']
-    bs = D['bs']
+def sim_GMMGLM_from_fit(D, drange = 20000, sigma = 0.1):
+    downsample = D['downsample']
     true_mus = D['mu_k']
-    true_ks = np.argmax(D['Q'],axis=1)
-    N = bs.size
+    Fs = np.squeeze(D['Fs'])
+    Ws = np.squeeze(D['Ws'])
+    bs = np.squeeze(D['bs'])
     d = [Fs.shape[1],Ws.shape[1]]
+    N = bs.size
+
+
+    ### NEW
+    #exclude clusters that might cause unstable simulations
+    # true_mus = true_mus[np.max(true_mus[:,d[0]:-1],axis=1)<-(np.sum(true_mus[:,:d[0]],axis=1)+true_mus[:,-1]+3*sigma*np.sqrt(d[0]+2))]
+    # K = true_mus.shape[0]
+    # true_ks = np.random.choice(K,size=N,p=D['wts'])
+    # true_betas = np.zeros((N,d[0]+d[1]+1))
+    # for n in range(N):
+    #     true_betas[n,:] = true_mus[true_ks[n]]+np.random.normal(scale=sigma,size=d[0]+d[1]+1)
+
+    ### OLD
     true_betas = np.zeros((N,d[0]+d[1]+1))
     true_betas[:,:d[0]] = Fs
     true_betas[:,d[0]:-1]  = Ws
@@ -94,10 +106,13 @@ def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
     D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
     sim_stim = [np.concatenate( D['binned_stim'][n]+D['test_binned_stim'][n] ) for n in range(N)]
     sim_stim = np.vstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
-    sim_stim /= np.max(sim_stim,axis=1,keepdims=True)
     sim_spikes = np.zeros_like(sim_stim)
+    rates = np.zeros_like(sim_stim)
     for n in range(N):
-        sim_spikes[n,:],_ = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
+        sim_spikes[n,:],rates[n,:] = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
+    clips = np.sum(rates>1,axis=1)
+    print(clips)
+    stop
 
     return sim_stim, sim_spikes, true_betas, true_mus, true_ks
 
