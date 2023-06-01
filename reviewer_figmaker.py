@@ -114,32 +114,30 @@ share = 'all'
 l2s = np.logspace(-7,-1,13) if share!='all' else np.array([0])
 trials = 20
 
-simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
-K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
-trial_max = np.argmax(simulBICs[Kfits==K_max,:])
-fname = 'sim_frivsccsimul_simul'+str(0)+'_Kfit'+str(K_max)+'_l2i'+str(0)+'_share='+share
-# fname = 'sim_frivsccsimul_seq_l2stimi='+str(0)+'_l2selfi='+str(0)+'_share='+share
+fname = 'sim_frivsccsimul_simul'+str(0)+'_Kfit'+str(5)+'_l2i'+str(0)+'_share='+share
 D_true = np.load(fname+'.npz',allow_pickle=True)
 N = D_true['Q'].shape[0]
 true_Fs = D_true['true_betas'][:d[0]]
 true_Ws = D_true['true_betas'][d[0]:-1]
 true_mus = D_true['true_mus']
-true_Sigmas = None
-true_wts = None
+fname = 'sim_frivsccsimul_seq_l2stimi='+str(0)+'_l2selfi='+str(0)+'_share='+share
+D_true = np.load(fname+'.npz',allow_pickle=True)
+true_Sigmas = np.zeros((1,))
+_,true_wts = np.unique(D_true['true_ks'],return_counts=True)
+true_wts=true_wts/N
 thresh=-4
 Sig_to_sigs = lambda X: [np.sqrt(np.diag(X[k])) if len(X[k].shape)==2 else np.sqrt(X[k]) for k in range(len(X))]
 
 # Simultaneous
 if run:
-    Kfit=K_max
+    Kfit=5
     for l2_i in range(l2s.size):
         max_BIC = -np.inf
         for trial in range(trials):
             fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
             try:
                 D = np.load(fname+'.npz',allow_pickle=True)
-                simul_bics[Ki,trial] = D['BIC']
-                if D['BIC']>max_BIC and Kfit==K_max:
+                if D['BIC']>max_BIC:
                     max_BIC=D['BIC']
                     simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts','l2']}
             except Exception as e:
@@ -171,14 +169,14 @@ if run:
         betas = D['Ws']
     else:
         betas = np.hstack([np.squeeze(D['Fs']),D['Ws'],np.expand_dims(D['bs'],1)])
-
+    print(betas.shape)
     max_bic = -np.inf
-    Kfit=K_max
+    Kfit=5
     for trial in range(trials):
         gmm = GaussianMixture(n_components=Kfit,covariance_type='diag', max_iter=100)
         gmm.fit(betas)
         bic = -gmm.bic(betas)
-        if bic>max_bic and Kfit==K_max:
+        if bic>max_bic:
             max_bic=bic
             seq_D = {'ars':adjusted_rand_score(D['true_ks'],gmm.predict(betas)),
                 'mu_k':gmm.means_,'C_k':gmm.covariances_,'wts':gmm.weights_}
@@ -191,11 +189,12 @@ fig,ax = plt.subplots()
 hs = []
 labels = []
 plot_data = [
-    ('True', true_mus, Sig_to_sigs(true_Sigmas), true_wts, 'k'),
-    ('Simultaneous', D['simul_D'][()]['mu_k'], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
-    ('Sequential', D['seq_D'][()]['mu_k'], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
+    ('True', true_mus[:,d[0]:-1], Sig_to_sigs(true_Sigmas), true_wts, 'k'),
+    ('Simultaneous', D['simul_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
+    ('Sequential', D['seq_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
 for label, means, sds, wts, color in plot_data:
-    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.03,:].T,color+'-')
+    h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
+#    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.03,:].T,color+'-')
     hs.append(h[0])
     labels.append(label)
 plt.xlabel('Time (ms)',fontsize=14)
