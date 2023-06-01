@@ -114,7 +114,8 @@ share = 'all'
 l2s = np.logspace(-7,-1,13) if share!='all' else np.array([0])
 trials = 20
 
-fname = 'sim_frivsccsimul_simul'+str(0)+'_Kfit'+str(5)+'_l2i'+str(0)+'_share='+share
+Kfit=3
+fname = 'sim_frivsccsimul_simul'+str(0)+'_Kfit'+str(Kfit)+'_l2i'+str(0)+'_share='+share
 D_true = np.load(fname+'.npz',allow_pickle=True)
 N = D_true['Q'].shape[0]
 true_Fs = D_true['true_betas'][:d[0]]
@@ -125,12 +126,13 @@ D_true = np.load(fname+'.npz',allow_pickle=True)
 true_Sigmas = np.zeros((1,))
 _,true_wts = np.unique(D_true['true_ks'],return_counts=True)
 true_wts=true_wts/N
+print(true_wts, true_mus.shape)
 thresh=-4
 Sig_to_sigs = lambda X: [np.sqrt(np.diag(X[k])) if len(X[k].shape)==2 else np.sqrt(X[k]) for k in range(len(X))]
 
+
 # Simultaneous
 if run:
-    Kfit=5
     for l2_i in range(l2s.size):
         max_BIC = -np.inf
         for trial in range(trials):
@@ -171,7 +173,6 @@ if run:
         betas = np.hstack([np.squeeze(D['Fs']),D['Ws'],np.expand_dims(D['bs'],1)])
     print(betas.shape)
     max_bic = -np.inf
-    Kfit=5
     for trial in range(trials):
         gmm = GaussianMixture(n_components=Kfit,covariance_type='diag', max_iter=100)
         gmm.fit(betas)
@@ -185,13 +186,14 @@ if run:
 D = np.load('../summary_files/ivscc_sims_share'+share+'.npz',allow_pickle=True)
 
 # Clusters Figure
+print(D['simul_D'][()]['ars'],D['seq_D'][()]['ars'])
 fig,ax = plt.subplots()
 hs = []
 labels = []
 plot_data = [
     ('True', true_mus[:,d[0]:-1], Sig_to_sigs(true_Sigmas), true_wts, 'k'),
-    ('Simultaneous', D['simul_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
-    ('Sequential', D['seq_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
+    ('Simultaneous (ARS='+str(np.round(D['simul_D'][()]['ars'],2))+')', D['simul_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
+    ('Sequential (ARS='+str(np.round(D['seq_D'][()]['ars'],2))+')', D['seq_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
 for label, means, sds, wts, color in plot_data:
     h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
 #    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.03,:].T,color+'-')
