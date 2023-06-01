@@ -196,7 +196,6 @@ plot_data = [
     ('Sequential (ARS='+str(np.round(D['seq_D'][()]['ars'],2))+')', D['seq_D'][()]['mu_k'][:,d[0]:-1], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
 for label, means, sds, wts, color in plot_data:
     h = plt.plot(np.arange(1,d[1]+1)*dt,means.T,color+'-')
-#    h = plt.plot(np.arange(1,d[1]+1)*dt,means[wts>0.03,:].T,color+'-')
     hs.append(h[0])
     labels.append(label)
 plt.xlabel('Time (ms)',fontsize=14)
@@ -204,6 +203,25 @@ plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
 ax.set_ylim([-5,2])
 plt.legend(hs,labels,fontsize=14)
 plt.savefig(savepath+'ivscc_sims_clusters_share='+share+'.png',bbox_inches='tight')
+plt.close()
+
+
+
+fig,ax = plt.subplots()
+hs = []
+labels = []
+plot_data = [
+    ('True', true_mus[:,:d[0]], Sig_to_sigs(true_Sigmas), true_wts, 'k'),
+    ('Simultaneous (ARS='+str(np.round(D['simul_D'][()]['ars'],2))+')', D['simul_D'][()]['mu_k'][:,:d[0]], Sig_to_sigs(D['simul_D'][()]['C_k']), D['simul_D'][()]['wts'], 'r'), 
+    ('Sequential (ARS='+str(np.round(D['seq_D'][()]['ars'],2))+')', D['seq_D'][()]['mu_k'][:,:d[0]], Sig_to_sigs(D['seq_D'][()]['C_k']), D['seq_D'][()]['wts'],'c')]
+for label, means, sds, wts, color in plot_data:
+    h = plt.plot(np.arange(d[0])*dt*downsample,means.T,color+'-')
+    hs.append(h[0])
+    labels.append(label)
+plt.xlabel('Time (ms)',fontsize=14)
+plt.ylabel('$\\mu^\\mathrm{stim}_k$',fontsize=14)
+plt.legend(hs,labels,fontsize=14)
+plt.savefig(savepath+'ivscc_sims_Fclusters_share='+share+'.png',bbox_inches='tight')
 plt.close()
 
 
