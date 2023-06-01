@@ -236,14 +236,14 @@ def main_sim_from_ivscc(seq_method = False, share='all'):
     Kfits = np.arange(1,21)
 
 
-    if True: #simul betas
+    if False: #simul betas
         simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
         K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
         trial_max = np.argmax(simulBICs[Kfits==K_max,:])
         D = np.load('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all.npz',allow_pickle=True)
     else: #seq betas
-        simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
-        K_max=Kfits[np.argmax(simulBICs)]
+        seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
+        K_max=Kfits[np.argmax(np.max(seqBICs,axis=1))]
         D = np.load('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all'+'.npz',allow_pickle=True)
 
     seed=0

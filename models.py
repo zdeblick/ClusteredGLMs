@@ -98,10 +98,14 @@ def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
     true_betas = np.zeros((N,d[0]+d[1]+1))
     print(sum(which_k),ks[which_k],true_ks.shape,true_mus.shape,true_sigmas.shape)
     sim_stim = sim_stim[:N]
+
     sim_spikes = np.zeros_like(sim_stim)
+    rates = np.zeros_like(sim_stim)
     for n in range(N):
         true_betas[n,:] = true_mus[true_ks[n],:]+np.random.normal(0,true_sigmas[true_ks[n],:])
-        sim_spikes[n,:],_ = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
+        sim_spikes[n,:],rates[n,:] = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
+    clips = np.sum(rates>1,axis=1)
+    print(clips)
 
     true_mus = true_mus[ks[which_k],:]
     true_sigmas = true_sigmas[ks[which_k],:]
