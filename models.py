@@ -87,16 +87,16 @@ def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
     K = D['K']
     d = D['d']
     true_mus = D['mu_k']
-    true_sigmas = np.array([np.sqrt(np.diag(D['C_k'][k])) for k in range(K)])
+    true_sigmas = np.array([np.sqrt(np.diag(D['C_k'][k])) for k in range(K)])/4
     true_ks = np.argmax(D['Q'],axis=1)
     ks = np.arange(K)
     ks = ks[np.isin(ks,true_ks)]
-    true_mu_plus_cis = true_mus+1*true_sigmas/np.sqrt(d[0]+2)
-    which_k = np.array([0 > true_mu_plus_cis[k,-1] + np.max(true_mu_plus_cis[k,d[0]:-1]) + np.sum(true_mu_plus_cis[k,:d[0]])*np.mean(np.max(sim_stim,axis=1)[true_ks==k]) for k in ks])
+    true_mu_plus_cis = true_mus+2*true_sigmas/np.sqrt(d[0]+2)
+    which_k = np.array([0 > true_mu_plus_cis[k,-1] + np.max(true_mu_plus_cis[k,d[0]:-1]) + np.sum(true_mu_plus_cis[k,:d[0]])*np.mean(np.max(sim_stim,axis=1)[true_ks==k]) and D['wts'][k]>0.03 for k in ks])
+    sim_stim = sim_stim[np.isin(true_ks,ks[which_k])]
     N = np.sum(np.isin(true_ks,ks[which_k]) )
     true_ks = true_ks[np.isin(true_ks,ks[which_k])]
     true_betas = np.zeros((N,d[0]+d[1]+1))
-    sim_stim = sim_stim[:N]
     print(sum(which_k),ks[which_k],true_ks.shape,true_mus.shape,true_sigmas.shape,sim_stim.shape)
 
     sim_spikes = np.zeros_like(sim_stim)
@@ -106,9 +106,10 @@ def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
         sim_spikes[n,:],rates[n,:] = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
     clips = np.sum(rates>1,axis=1)
     print(clips)
-
     true_mus = true_mus[ks[which_k],:]
     true_sigmas = true_sigmas[ks[which_k],:]
+    print(true_mus)
+
     return sim_stim, sim_spikes, true_betas, true_mus, true_ks
 
 

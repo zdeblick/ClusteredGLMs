@@ -236,7 +236,7 @@ def main_sim_from_ivscc(seq_method = False, share='all'):
     Kfits = np.arange(1,21)
 
 
-    if False: #simul betas
+    if True: #simul betas
         simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
         K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
         trial_max = np.argmax(simulBICs[Kfits==K_max,:])
