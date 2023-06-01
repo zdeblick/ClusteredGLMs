@@ -226,7 +226,7 @@ def main_data(seq_method=False,val_bins=False,all_n=True,subsub=False,share='W')
     return True
 
 
-def main_sim_from_ivscc(seq_method = False, share='W'):
+def main_sim_from_ivscc(seq_method = False, share='all'):
     os.chdir('files')
     id = os.getenv(array_id_str)
     id = 0 if id is None else int(id)
@@ -246,21 +246,23 @@ def main_sim_from_ivscc(seq_method = False, share='W'):
         K_max=Kfits[np.argmax(simulBICs)]
         D = np.load('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all'+'.npz',allow_pickle=True)
 
+    seed=0
+    np.random.seed(seed)
+    sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
+    N = sim_stim.shape[0]
+
+    Kfits = np.array([true_mus.shape[0]])
     l2s_stim = np.logspace(-7,-1,13)
     l2s_self = np.logspace(-7,-1,13)
     if seq_method:
         (l2_stim_i,l2_self_i) = np.unravel_index(id,(l2s_stim.size,l2s_self.size))
         fname = 'sim_frivsccsimul_seq_l2stimi='+str(l2_stim_i)+'_l2selfi='+str(l2_self_i)+'_share='+share
     else:
-        l2s = [0.0] if share=='all' else l2s_stim
+        l2s = np.array([0.0]) if share=='all' else l2s_stim
         (trial,Ki,l2_i) = np.unravel_index(id,(500,Kfits.size,l2s.size))
         Kfit = Kfits[Ki]
         fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
 
-    seed=0
-    np.random.seed(seed)
-    sim_stim, sim_spikes, true_betas, true_mus, true_ks = sim_GMMGLM_from_fit(D, drange=20000, downsample=downsample)
-    N = sim_stim.shape[0]
 
     np.random.seed(int(time.time()*10000000000000)%(2**32))
     

@@ -79,26 +79,32 @@ def sim_GLM(stim, stim_filt, spk_filt, offset, downsample=1, smax=1, n_sims=1, n
 
 
 def sim_GMMGLM_from_fit(D, drange = 20000, downsample=None):
-    Fs = D['Fs']
-    Ws = D['Ws']
-    bs = D['bs']
-    true_mus = D['mu_k']
-    true_ks = np.argmax(D['Q'],axis=1)
-    N = bs.size
-    d = [Fs.shape[1],Ws.shape[1]]
-    true_betas = np.zeros((N,d[0]+d[1]+1))
-    true_betas[:,:d[0]] = Fs
-    true_betas[:,d[0]:-1]  = Ws
-    true_betas[:,-1] = bs
-
-    D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
-    sim_stim = [np.concatenate( D['binned_stim'][n]+D['test_binned_stim'][n] ) for n in range(N)]
+    D_data = np.load('../ivscc_data_n12.npz',allow_pickle=True)
+    N = len(D_data['binned_stim'])
+    sim_stim = [np.concatenate( D_data['binned_stim'][n]+D_data['test_binned_stim'][n] ) for n in range(N)]
     sim_stim = np.vstack([ s[(s.size-drange)//2:(s.size+drange)//2] for s in sim_stim ])
-    sim_stim /= np.max(sim_stim,axis=1,keepdims=True)
+
+    K = D['K']
+    d = D['d']
+    true_mus = D['mu_k']
+    true_sigmas = np.array([np.sqrt(np.diag(D['C_k'][k])) for k in range(K)])
+    true_ks = np.argmax(D['Q'],axis=1)
+    ks = np.arange(K)
+    ks = ks[np.isin(ks,true_ks)]
+    true_mu_plus_cis = true_mus+1*true_sigmas/np.sqrt(d[0]+2)
+    which_k = np.array([0 > true_mu_plus_cis[k,-1] + np.max(true_mu_plus_cis[k,d[0]:-1]) + np.sum(true_mu_plus_cis[k,:d[0]])*np.mean(np.max(sim_stim,axis=1)[true_ks==k]) for k in ks])
+    N = np.sum(np.isin(true_ks,ks[which_k]) )
+    true_ks = true_ks[np.isin(true_ks,ks[which_k])]
+    true_betas = np.zeros((N,d[0]+d[1]+1))
+    print(sum(which_k),ks[which_k],true_ks.shape,true_mus.shape,true_sigmas.shape)
+    sim_stim = sim_stim[:N]
     sim_spikes = np.zeros_like(sim_stim)
     for n in range(N):
+        true_betas[n,:] = true_mus[true_ks[n],:]+np.random.normal(0,true_sigmas[true_ks[n],:])
         sim_spikes[n,:],_ = sim_GLM(sim_stim[n:n+1,:],true_betas[n,:d[0]],true_betas[n,d[0]:d[0]+d[1]],true_betas[n,-1],downsample=downsample)
 
+    true_mus = true_mus[ks[which_k],:]
+    true_sigmas = true_sigmas[ks[which_k],:]
     return sim_stim, sim_spikes, true_betas, true_mus, true_ks
 
 
@@ -311,6 +317,7 @@ class CellTypesModel:
         for k,v in kwargs.items():
             setattr(self,k,v)
         
+        L_dsn = 1*d[0]+d[1]+1
 
         #indices of shared params
         if share=='W':
@@ -322,7 +329,6 @@ class CellTypesModel:
         d_s = shared_i.size
         shared_i2 = (np.repeat(shared_i,d_s),np.tile(shared_i,d_s))
 
-        L_dsn = 1*d[0]+d[1]+1
         reg_i = np.setdiff1d(np.arange(L_dsn-1),shared_i)
         d_r = reg_i.size
         reg_i2 = (np.repeat(reg_i,d_r),np.tile(reg_i,d_r))
