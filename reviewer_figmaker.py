@@ -201,7 +201,7 @@ for label, means, sds, wts, color in plot_data:
     labels.append(label)
 plt.xlabel('Time (ms)',fontsize=14)
 plt.ylabel('$\\mu^\\mathrm{self}_k$',fontsize=14)
-ax.set_ylim([-4,2])
+ax.set_ylim([-5,2])
 plt.legend(hs,labels,fontsize=14)
 plt.savefig(savepath+'ivscc_sims_clusters_share='+share+'.png',bbox_inches='tight')
 plt.close()
