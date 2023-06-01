@@ -22,45 +22,46 @@ mpl.rcParams['ytick.labelsize'] = 14
 mpl.rcParams['axes.labelsize'] = 14
 mpl.rcParams['figure.max_open_warning'] = 100
 
-# Comparing all 4 best solutions
-fnames = []
-for share in ['W','all']:
-    #Simultaneous
-    simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
-    K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
-    trial_max = np.argmax(simulBICs[Kfits==K_max,:])
-    fnames.append('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all')
+if False:
+    # Comparing all 4 best solutions
+    fnames = []
+    for share in ['W','all']:
+        #Simultaneous
+        simulBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['simulBICs']
+        K_max=Kfits[np.argmax(np.max(simulBICs,axis=1))]
+        trial_max = np.argmax(simulBICs[Kfits==K_max,:])
+        fnames.append('ivscc_n1t2v_simulreg_share_'+share+str(trial_max)+'_K='+str(K_max)+'_sub=allN_train_reps=all')
 
-    #Sequential
-    seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
-    K_max=Kfits[np.argmax(np.max(seqBICs,axis=1))]
-    fnames.append('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all')
-Ds = [np.load(fname+'.npz',allow_pickle=True) for fname in fnames]
-cases = ['A','A','B','B']
-meths = ['Simultaneous','Sequential']*2
-for i in range(len(Ds)):
-    for j in range(i):
-        fig,ax = plt.subplots()
-        cm = confusion_matrix(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
-        row_inds,col_inds = linear_sum_assignment(-cm)
-        cm = cm[row_inds,:][:,col_inds]
-        cm = cm[:,np.sum(cm,axis=0)>0][np.sum(cm,axis=1)>0,:]
-        cm = cm/(np.sqrt(np.sum(cm,axis=1,keepdims=True)*np.sum(cm,axis=0,keepdims=True)))
-        im = ax.imshow(cm,origin='lower',cmap=cc.cm.blues)#,vmin=0,vmax=50)
-        ars = adjusted_rand_score(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
-        ax.set_title('ARS='+str(np.round(ars,2)))
+        #Sequential
+        seqBICs = np.load('../summary_files/BIC_allN_share='+share+'.npz')['seqBICs']
+        K_max=Kfits[np.argmax(np.max(seqBICs,axis=1))]
+        fnames.append('ivscc_n1t2v_seqreg_share_'+share+'_K='+str(K_max)+'_sub=allN_train_reps=all')
+    Ds = [np.load(fname+'.npz',allow_pickle=True) for fname in fnames]
+    cases = ['A','A','B','B']
+    meths = ['Simultaneous','Sequential']*2
+    for i in range(len(Ds)):
+        for j in range(i):
+            fig,ax = plt.subplots()
+            cm = confusion_matrix(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
+            row_inds,col_inds = linear_sum_assignment(-cm)
+            cm = cm[row_inds,:][:,col_inds]
+            cm = cm[:,np.sum(cm,axis=0)>0][np.sum(cm,axis=1)>0,:]
+            cm = cm/(np.sqrt(np.sum(cm,axis=1,keepdims=True)*np.sum(cm,axis=0,keepdims=True)))
+            im = ax.imshow(cm,origin='lower',cmap=cc.cm.blues)#,vmin=0,vmax=50)
+            ars = adjusted_rand_score(np.argmax(Ds[i]['Q'],axis=1),np.argmax(Ds[j]['Q'],axis=1))
+            ax.set_title('ARS='+str(np.round(ars,2)))
 
-        ax.set_xlim([-0.5,cm.shape[1]-0.5])
-        ax.set_ylim([cm.shape[0]-0.5,-0.5])
-        ax.set_xticks([])
-        ax.set_yticks([])
-        ax.set_ylabel(meths[i]+' method, case '+cases[i])
-        ax.set_xlabel(meths[j]+' method, case '+cases[j])
-        pixel_size_in = 0.35
-        set_size(pixel_size_in*cm.shape[1],pixel_size_in*cm.shape[0],ax=ax)
+            ax.set_xlim([-0.5,cm.shape[1]-0.5])
+            ax.set_ylim([cm.shape[0]-0.5,-0.5])
+            ax.set_xticks([])
+            ax.set_yticks([])
+            ax.set_ylabel(meths[i]+' method, case '+cases[i])
+            ax.set_xlabel(meths[j]+' method, case '+cases[j])
+            pixel_size_in = 0.35
+            set_size(pixel_size_in*cm.shape[1],pixel_size_in*cm.shape[0],ax=ax)
 
-        plt.savefig(savepath+'khat_comps_'+meths[i]+cases[i]+'_vs_'+meths[j]+cases[j]+'.png',bbox_inches='tight')
-        plt.close() 
+            plt.savefig(savepath+'khat_comps_'+meths[i]+cases[i]+'_vs_'+meths[j]+cases[j]+'.png',bbox_inches='tight')
+            plt.close() 
 
 
 
