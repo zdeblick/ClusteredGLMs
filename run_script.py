@@ -264,7 +264,7 @@ def main_sim_from_ivscc(seq_method = False, share='all'):
         fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
 
 
-    np.random.seed(int(time.time()*10000000000000)%(2**32))
+    np.random.seed(id)
     
     if seq_method:
         Ws = []
