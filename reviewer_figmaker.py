@@ -114,7 +114,7 @@ share = 'all'
 l2s = np.logspace(-7,-1,13) if share!='all' else np.array([0])
 trials = 20
 
-Kfit=3
+Kfit=2
 fname = 'sim_frivsccsimul_simul'+str(0)+'_Kfit'+str(Kfit)+'_l2i'+str(0)+'_share='+share
 D_true = np.load(fname+'.npz',allow_pickle=True)
 N = D_true['Q'].shape[0]
@@ -139,7 +139,8 @@ if run:
             fname = 'sim_frivsccsimul_simul'+str(trial)+'_Kfit'+str(Kfit)+'_l2i'+str(l2_i)+'_share='+share
             try:
                 D = np.load(fname+'.npz',allow_pickle=True)
-                if D['BIC']>max_BIC:
+                print(D['bad'])
+                if D['BIC']>max_BIC and not np.any(D['bad']):
                     max_BIC=D['BIC']
                     simul_D = {k:D[k] for k in ['ars','Ws','Fs','bs','mu_k','C_k','wts','l2']}
             except Exception as e:
@@ -227,3 +228,4 @@ plt.close()
 
 
 
+print(D['simul_D'][()]['mu_k'][:,:d[0]])
