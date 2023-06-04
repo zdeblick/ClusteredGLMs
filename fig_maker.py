@@ -663,14 +663,7 @@ for share in ['W','all']:
         plt.ylabel('Number of times rate exceeded 1 in simulations',fontsize=14)
         plt.title(methnames[meth]+' Method, Case '+{'W':'A','all':'B'}[share],fontsize=14)
         plt.savefig(savepath+'IVSCC_critvals_'+meth+'reg_share'+share+'_K='+str(K_max)+'.png',bbox_inches='tight')
-        plt.close()
-
-        # plt.hist(crit_vals)
-        # plt.xlabel('Critical quantity for unstable simulations',fontsize=14)
-        # plt.ylabel('Frequency',fontsize=14)
-        # plt.title(methnames[meth]+' Method, Case '+{'W':'A','all':'B'}[share],fontsize=14)
-        # plt.savefig(savepath+'IVSCC_critvals_'+meth+'reg_share'+share+'_K='+str(K_max)+'.png',bbox_inches='tight')
-        # plt.close()         
+        plt.close()  
 
 
 for share in ['W']: #we haven't done these analyses for case B yet
