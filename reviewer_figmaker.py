@@ -1,8 +1,10 @@
 import numpy as np
 from scipy.signal import correlate
 import matplotlib.pyplot as plt
+from scipy.stats import pearsonr
 from sklearn.metrics import confusion_matrix, pairwise_distances, adjusted_rand_score
 from sklearn.mixture import GaussianMixture
+from itertools import combinations
 import os
 from helpers import *
 from scipy.optimize import linear_sum_assignment
@@ -68,7 +70,7 @@ if False:
 
 
 D = np.load('../ivscc_data_n12.npz',allow_pickle=True)
-all_spks = D['binned_stim']
+all_spks = D['binned_spikes']
 dt = D['bin_len']*1000 #ms
 N=len(all_spks)
 d = [10,20]
@@ -76,33 +78,51 @@ downsample = 5
 
 #Autocorrelation figure
 lags = 5100
-if run:
-    autocorrs = np.zeros((N,2*lags+1))
-    for n in range(N):
-        spks = np.hstack(all_spks[n])
-        spks-=np.mean(spks)
-        c = correlate(spks,spks)
-        autocorrs[n,:] = c[(c.size-1)//2-lags:(c.size-1)//2+lags+1]/c[(c.size-1)//2]
-    np.savez('../summary_files/ivscc_data_autocorrs',autocorrs=autocorrs)
-autocorrs = np.load('../summary_files/ivscc_data_autocorrs.npz')['autocorrs']
+sm_l = 21
+autocorrs = np.zeros((N,2*lags+1))
+rvals = np.zeros((N,))
+for n in range(N):
+    trial_avg = np.mean(np.vstack(all_spks[n]),axis=0)
+    trial_avg = correlate(trial_avg,np.ones((sm_l,))/sm_l,mode='same')
+    # trial_avg = np.mean(np.vstack(all_spks[n]))
+    resids = np.hstack([trial_spks-trial_avg for trial_spks in all_spks[n]])
+    c = correlate(resids,np.tile(resids,3))
+    rvals[n] = np.mean(np.array([pearsonr(tr-trial_avg,tr2-trial_avg)[0] for tr,tr2 in combinations(all_spks[n],2)]))
+    autocorrs[n,:] = c[(c.size-1)//2-lags:(c.size-1)//2+lags+1]/c[(c.size-1)//2]
 
-which_lags = np.arange(-lags,lags+1)%500!=0
+which_lags = np.arange(-lags,lags+1)%500!=0-1
 autocorrs = autocorrs[:,which_lags]
-sm_l = 41
-autocorrs = correlate(autocorrs,np.ones((1,sm_l))/sm_l,mode='same')
+
+# autocorrs = correlate(autocorrs,np.ones((1,sm_l))/sm_l,mode='same')
 autocorrs/=np.max(autocorrs,keepdims=True,axis=1)
 which_lags[:sm_l] = False
 which_lags[-sm_l:] = False
 fig,ax = plt.subplots()
+plt.hist(rvals,bins = np.arange(-0.3,1.0001,0.1))
+plt.xlabel('Pearson\'s r between trial residuals',fontsize=14)
+plt.ylabel('Number of neurons',fontsize=14)
+# plt.xlim(-1.01,-0.99)
+# plt.xticks(np.arange(0,1.1,0.2))
+plt.grid()
+fig.tight_layout()
+plt.savefig(savepath+'ivscc_trial_rvals')
+plt.show()
+plt.close()
+
+
+fig,ax = plt.subplots()
 plt.plot((dt*np.arange(-lags,lags+1)/1000)[which_lags], autocorrs[:10,sm_l:-sm_l].T,linewidth=0.8)
 plt.xlabel('Time (s)',fontsize=14)
-plt.ylabel('Autocorrelation of stimulus',fontsize=14)
-# plt.xlim(-1.01,-0.99)
+plt.ylabel('Autocorrelation of spike residuals',fontsize=14)
 plt.xticks(np.arange(-9,10,3))
 plt.grid()
+# plt.xlim(-9.01,-8.99)
+fig.tight_layout()
 plt.savefig(savepath+'ivscc_autocorrs')
 plt.show()
 plt.close()
+
+stop
 
 
 
