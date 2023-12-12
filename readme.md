@@ -139,10 +139,5 @@ To re-generate the summary files (which are used to make the figures) from the m
 	- create yaml file for step 1
 	- label every plt.savefig() call with fig reference in paper
 
-	Questions:
-	- should sequential method be a separate class, like simul? If so, how could I cleanly re-use step 1?
-	- should run_script be two scripts?
-	- should figs, files, summary_files be subdivided according to sim/ivscc, seq/simul?
-
 
 
