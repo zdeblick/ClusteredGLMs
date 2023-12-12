@@ -1,4 +1,7 @@
-This code was used to generate the paper (!!!). If you use it to publish any results, please cite (!!!).
+This code was used to generate the paper "Modeling functional cell types in spike train data". If you use it to publish any results, please cite it:
+
+D. N. Zdeblick, E. T. Shea-Brown, D. M. Witten, and M. A. Buice, “Modeling functional cell types in spike train data,” PLOS Computational Biology, vol. 19, no. 10, p. e1011509, Oct. 2023, doi: 10.1371/journal.pcbi.1011509.
+
 
 
 # Repo Summary
