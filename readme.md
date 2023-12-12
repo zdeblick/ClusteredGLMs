@@ -133,11 +133,8 @@ To re-generate the summary files (which are used to make the figures) from the m
 	python sim_from_fit_figmaker.py
 
 # TODO (!!!): 
-
-	- add file, function, class headers to .py files. Comments on array sizing.
-	- Fill out readme with appropriate commands for steps for 1,3-5, reference these instructions in run_script.py and job_script.slurm
+	- Fill out readme with appropriate commands for steps for 1,3-5, reference these instructions in job_script.slurm
 	- create yaml file for step 1
-	- label every plt.savefig() call with fig reference in paper
 
 
 
